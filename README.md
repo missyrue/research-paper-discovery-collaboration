@@ -102,3 +102,14 @@ See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the require
 **Research Paper Discovery & Collaboration System**
 
 Suggested repository name: `research-paper-discovery-collaboration`.
+
+## Team Work Split
+
+The work is divided into two comparable database-focused tracks so each student can own and commit a distinct set of files:
+
+| Student | Owned work | Files / deliverables |
+|---|---|---|
+| Aaruni Choudhary (PES2UG24CS013) | Relational data model: PostgreSQL tables, keys, constraints, indexes, and application query examples | `database/sql/schema.sql`, `database/sql/queries.sql` |
+| Anchita Chhibba (PES2UG24CS060) | Semantic retrieval: vector document model, Atlas index configuration, embedding ingestion/search examples, and semantic-search evaluation/demo | `database/vector/`, semantic retrieval documentation and demo evidence |
+
+Each student should commit their own work under their GitHub identity after reviewing it. The relational and vector tracks can be developed independently and integrated through the shared `paper_id` identifier.
