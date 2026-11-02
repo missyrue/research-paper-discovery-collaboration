@@ -14,7 +14,7 @@ A web application for academic paper discovery and organization.
 
 ## 3. Abstract
 
-Academic literature is growing rapidly, while keyword-only discovery can miss useful work described with different terminology. Atlas is a web application for searching research papers using a hybrid database design: MySQL stores canonical paper and user data, while MongoDB Atlas Vector Search stores paper embeddings and ranks semantic matches. The Next.js app generates embeddings locally with Ollama's `nomic-embed-text` model, so semantic retrieval does not require a paid embedding API key. Admins can index the MySQL paper library; signed-in users can run semantic search. Accounts use database-backed `Researcher` and `Admin` roles; admin-only APIs manage paper records. Passwords use scrypt hashes and sessions use signed HTTP-only cookies. Persisted collaboration workflows remain future work.
+Academic literature is growing rapidly, while keyword-only discovery can miss useful work described with different terminology. Paperloom is a web application for searching research papers using a hybrid database design: MySQL stores canonical paper and user data, while MongoDB Atlas Vector Search stores paper embeddings and ranks semantic matches. The Next.js app generates embeddings locally with Ollama's `nomic-embed-text` model, so semantic retrieval does not require a paid embedding API key. Admins can index the MySQL paper library; signed-in users can run semantic search. Accounts use database-backed `Researcher` and `Admin` roles; admin-only APIs manage paper records and run the SQL evaluation demo. Saved papers and collections are stored in browser-local storage; authenticated collaboration workflows remain future work.
 
 ## 4. Tech Stack
 
@@ -59,7 +59,7 @@ The schema also defines roles, users, authors, paper-author relationships, inter
 
 ### Advanced MySQL 8 evaluation examples
 
-[`../database/mysql/advanced_concepts_demo.sql`](../database/mysql/advanced_concepts_demo.sql) contains executable JOIN, GROUP BY/COUNT, correlated and nested subquery, UPDATE, DELETE, trigger-audit, full-text search, stored-procedure, view, transaction, and row-lock examples. The UPDATE and DELETE demonstrations inspect the trigger's JSON audit record inside an InnoDB transaction and then roll it back; these examples do not leave sample data changed. [`../database/mysql/advanced_concepts.sql`](../database/mysql/advanced_concepts.sql) implements the audit table and triggers, ranked-search and bookmark procedures, and the engagement view. The app uses the FULLTEXT index for keyword search; the demo-only procedures and view are not called by the app. The Windows setup script installs the advanced objects automatically. Cross-platform manual commands are in [`../database/mysql/ADVANCED_CONCEPTS.md`](../database/mysql/ADVANCED_CONCEPTS.md). These SQL examples are documented as runnable but have not been represented as executed verification results.
+[`../database/mysql/advanced_concepts_demo.sql`](../database/mysql/advanced_concepts_demo.sql) contains executable JOIN, GROUP BY/COUNT, correlated and nested subquery, UPDATE, DELETE, trigger-audit, full-text search, stored-procedure, view, transaction, and row-lock examples. The UPDATE and DELETE demonstrations inspect the trigger's JSON audit record inside an InnoDB transaction and then roll it back; these examples do not leave sample data changed. [`../database/mysql/advanced_concepts.sql`](../database/mysql/advanced_concepts.sql) implements the audit table and triggers, ranked-search and bookmark procedures, and the engagement view. The app uses the FULLTEXT index for keyword search; the demo-only procedures and view are not called by the app. The Windows setup script installs the advanced objects automatically. Cross-platform manual commands are in [`../database/mysql/ADVANCED_CONCEPTS.md`](../database/mysql/ADVANCED_CONCEPTS.md). An Admin-only `POST /api/admin/evaluation` route now runs the JOIN, GROUP BY, correlated/nested subquery, aggregate view, and trigger-backed UPDATE/DELETE examples against live MySQL data and returns their result tables to the `/admin` page. The writes are rolled back before results are returned. The examples must still be run on the submission machine before reporting them as verified there.
 
 ### Relational model / ER diagram
 
@@ -104,6 +104,7 @@ apps/web/
 │   ├── api/auth/route.ts
 │   ├── api/admin/papers/route.ts
 │   ├── api/admin/vector-index/route.ts
+│   ├── api/admin/evaluation/route.ts
 │   ├── admin/page.tsx
 │   ├── login/page.tsx
 │   ├── globals.css
@@ -127,27 +128,35 @@ database/
 
 ## 8. Screenshots from the Running Application
 
-The following captures show the Atlas discovery interface and paper results. The two discovery captures show three sample papers loaded from the local MySQL database and labeled as MySQL keyword results.
+These screenshots document the Paperloom sign-in and researcher views, MySQL administration, the live SQL evaluation demo, keyword search, semantic search, saved papers, and collections. They are supplied captures of the running application.
 
-![Atlas discovery page showing the MySQL paper search interface](../screenshots/atlas-discovery-mysql.png)
+### Authentication and paper administration
 
-![Atlas paper search results returned from the MySQL sample library](../screenshots/atlas-paper-results.png)
+![Paperloom sign-in and account creation screen](../screenshots/01-login.png)
 
-The search implementation is in `apps/web/app/api/papers/route.ts`; registration, sign-in, and role checks are implemented through `apps/web/app/api/auth/route.ts` and `apps/web/lib/authorization.ts`. These captures show genuine MySQL keyword-search screens. Sign-in, semantic-search, and source-code screenshots are not included here.
+![Admin paper library and Atlas vector sync controls](../screenshots/02-admin-paper-library.png)
 
-### Verified database and semantic retrieval results
+### Live SQL evaluation
 
-The following values were checked against the running local project and connected Atlas collection on 2026-11-02:
+![JOIN and GROUP BY evaluation results](../screenshots/03-sql-evaluation-join-groupby.png)
 
-| Check | Verified result |
-|---|---|
-| MySQL | Connected to `atlas_research` on MySQL 8.4.9; 3 paper records |
-| Local embeddings | Ollama `nomic-embed-text`; query vector has 768 dimensions |
-| MongoDB Atlas | Connected; `paper_embedding_index` is `READY` with 768 dimensions |
-| Vector ingestion | 3 paper vectors stored with model `nomic-embed-text` |
-| Semantic query | `graph models for molecular discovery` returned 3 matches; top result was *Molecular Property Prediction with Graph Neural Networks* (paper ID 1, score 0.8691) |
+![Correlated and nested subquery evaluation results](../screenshots/04-sql-evaluation-subqueries.png)
 
-The application resolves search result IDs to canonical paper records in MySQL.
+![UPDATE and DELETE evaluation with trigger audit results and rollback](../screenshots/05-sql-evaluation-update-delete-triggers.png)
+
+![Aggregate view evaluation results](../screenshots/06-sql-evaluation-view.png)
+
+### Researcher discovery and library
+
+![Paperloom Discover page using MySQL keyword search](../screenshots/07-paperloom-discover.png)
+
+![MySQL keyword search result card](../screenshots/08-mysql-keyword-search.png)
+
+![MongoDB Atlas semantic search results](../screenshots/09-atlas-semantic-search.png)
+
+![Saved papers and collections in the Paperloom workspace](../screenshots/10-saved-papers-collections.png)
+
+The search implementation is in `apps/web/app/api/papers/route.ts`; registration, sign-in, and role checks are implemented through `apps/web/app/api/auth/route.ts` and `apps/web/lib/authorization.ts`. The SQL evaluation is run through the Admin-only `/api/admin/evaluation` endpoint. The captures evidence the UI and results visible at capture time; rerun database setup and evaluation on another machine before claiming its local database state is verified there.
 
 ## 9. Problem, Objectives, Scope, and Requirements
 
@@ -167,9 +176,9 @@ Keyword search can miss relevant research when a paper describes an idea using d
 | Requirement | Implementation status |
 |---|---|
 | Search and filter the seeded paper library | Implemented with parameterized MySQL queries |
-| Register/sign in as a Researcher; restrict Admin operations | Implemented with database roles and protected routes; role-specific screenshots are not included here |
+| Register/sign in as a Researcher; restrict Admin operations | Implemented with database roles and protected routes; sign-in and Admin screens are included |
 | Add, edit, and remove paper records as Admin | Implemented through the Admin page and protected API |
-| Create paper vectors and retrieve semantic matches | Verified: 3 local Ollama vectors stored in Atlas and semantic query returned 3 matches |
+| Create paper vectors and retrieve semantic matches | Semantic retrieval is implemented with local Ollama and Atlas; a result screen is included. Re-index the target database before a new demonstration. |
 | Persist bookmarks, collections, research groups, and discussions | Represented in the relational schema; user-facing persistence workflows remain future work |
 
 ### Database choice and advanced DBMS concepts
@@ -211,7 +220,7 @@ The project demonstrates a hybrid DBMS design that combines relational integrity
 - Persist bookmarks and collections through authenticated APIs.
 - Implement research-group and discussion workflows.
 - Add paper ingestion from scholarly sources and evaluate retrieval quality on a larger dataset.
-- Capture the verified semantic-search screen, source code, and role-based authorization screens if required by the instructor.
+- Capture source-code evidence if required by the instructor.
 
 ## Repository
 

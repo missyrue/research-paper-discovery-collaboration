@@ -1,6 +1,6 @@
 # Research Paper Discovery & Collaboration System
 
-Atlas is a DBMS project for discovering academic papers with MySQL keyword search and optional MongoDB Atlas vector similarity search. MySQL stores canonical paper and user records; Atlas stores embeddings and returns semantically ranked paper IDs.
+Paperloom is a DBMS project for discovering academic papers with MySQL keyword search and optional MongoDB Atlas vector similarity search. MySQL stores canonical paper and user records; Atlas stores embeddings and returns semantically ranked paper IDs.
 
 
 ## Team
@@ -14,7 +14,7 @@ Atlas is a DBMS project for discovering academic papers with MySQL keyword searc
 
 Researchers often search across large collections of papers using exact keywords. A paper that discusses the same idea with different terminology can be difficult to find. Paper discovery, bookmarking, reading-list organization, and research discussion are also commonly spread across separate tools.
 
-The current app searches and filters a seeded MySQL paper library, supports researcher accounts and admin-controlled paper management, and includes a semantic retrieval path backed by Atlas and local Ollama embeddings. Saved-paper persistence, collections, and research collaboration remain future work.
+The current app searches and filters a seeded MySQL paper library, supports researcher accounts and admin-controlled paper management, and includes a semantic retrieval path backed by Atlas and local Ollama embeddings. Saved papers and collections work in browser-local storage; authenticated database persistence and research collaboration remain future work.
 
 ## Implemented and Planned Features
 
@@ -24,7 +24,9 @@ The current app searches and filters a seeded MySQL paper library, supports rese
 | Semantic paper search | Implemented with Ollama embeddings and MongoDB Atlas Vector Search |
 | Registration/sign-in and Researcher/Admin roles | Implemented in the application; see authorization setup |
 | Admin paper management and vector indexing | Implemented in protected routes and `/admin` |
-| Bookmarks, collections, interests, groups, and discussions | Schema included; persistent user workflows are future work |
+| Saved papers and collections | Browser-local UI works; authenticated MySQL persistence is future work |
+| Interests, groups, and discussions | Schema included; user workflows are future work |
+| SQL evaluation demo | Admin page runs JOIN, GROUP BY, subquery, view, UPDATE/DELETE, and trigger examples |
 
 ## Technology Stack
 
@@ -51,11 +53,19 @@ The Atlas connection string and MySQL credentials are per-developer secrets in i
 ├── docs/
 │   └── DBMS_PROJECT_REPORT.md        # DBMS mini project report
 └── screenshots/
-    ├── atlas-discovery-mysql.png     # App search page
-    └── atlas-paper-results.png      # MySQL result cards
+    ├── 01-login.png
+    ├── 02-admin-paper-library.png
+    ├── 03-sql-evaluation-join-groupby.png
+    ├── 04-sql-evaluation-subqueries.png
+    ├── 05-sql-evaluation-update-delete-triggers.png
+    ├── 06-sql-evaluation-view.png
+    ├── 07-paperloom-discover.png
+    ├── 08-mysql-keyword-search.png
+    ├── 09-atlas-semantic-search.png
+    └── 10-saved-papers-collections.png
 ```
 
-The checked-in screenshots show the running MySQL keyword-search interface. They do not document sign-in or semantic search.
+The checked-in screenshots document sign-in, MySQL Admin and keyword-search screens, the SQL evaluation demo, Atlas semantic search, and saved-paper/collection views.
 
 ## Database Design
 
@@ -70,7 +80,7 @@ The local app uses MySQL 8. Apply [`database/mysql/schema.sql`](database/mysql/s
 
 Primary keys, foreign keys, uniqueness constraints, check constraints, and indexes help maintain data integrity and support common lookups. MySQL commands are also included in `database/sql/` for the report.
 
-The database layer also includes MySQL 8 evaluation examples for JOIN, GROUP BY with aggregates, UPDATE, DELETE, correlated and nested subqueries, audit triggers, and other advanced concepts. The write examples run in transactions and roll back. See [`database/mysql/ADVANCED_CONCEPTS.md`](database/mysql/ADVANCED_CONCEPTS.md).
+The database layer also includes MySQL 8 evaluation examples for JOIN, GROUP BY with aggregates, UPDATE, DELETE, correlated and nested subqueries, audit triggers, and other advanced concepts. The Admin page's **Run database evaluation** action displays live query results; its write examples run in transactions and roll back. See [`database/mysql/ADVANCED_CONCEPTS.md`](database/mysql/ADVANCED_CONCEPTS.md).
 
 The app's semantic mode embeds a query locally with Ollama, retrieves ranked paper IDs through Atlas `$vectorSearch`, and resolves paper details from MySQL. Admins can sync embeddings from the MySQL library using `/admin`. Atlas must have the configured 768-dimension vector index, Ollama must be running with `nomic-embed-text`, and `MONGODB_URI` must be configured before this mode will run. No OpenAI API key is required. MySQL remains the source of truth for paper records.
 
@@ -105,7 +115,7 @@ See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the require
 1. Verify registration and sign-in against the local MySQL instance.
 2. Persist bookmarks and collections for signed-in users.
 3. Build research-group, collaboration, and discussion workflows.
-4. Capture the live semantic-search and role authorization flows for the final report.
+4. Capture source-code evidence if required by the instructor.
 
 ## Resume Project Name
 

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       const matches = await searchPaperVectors(collection, vector, {
         index: process.env.ATLAS_VECTOR_INDEX ?? "paper_embedding_index",
         model,
-        limit: 30,
+        limit: 10,
         topic: topic || undefined,
       });
       if (!matches.length) return NextResponse.json({ papers: [], mode: "semantic" });
@@ -115,7 +115,7 @@ export async function GET(request: Request) {
     FROM papers AS p
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
     ORDER BY ${orderBy}
-    LIMIT 50`;
+    LIMIT 10`;
 
   try {
     const [rows] = await getDbPool().execute<PaperRow[]>(sql, values);

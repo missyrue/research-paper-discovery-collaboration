@@ -40,6 +40,18 @@ PowerShell users can run each SQL file with
 advanced objects, and demo seed, then grants the app user `EXECUTE` on the two
 stored procedures.
 
+For a database that is already set up, install or refresh just the advanced
+objects without rotating the app password or session secret:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File database/mysql/install-advanced.ps1 -Port 3306
+```
+
+The script prompts for the MySQL administrator password. The `/admin` page's
+**Run database evaluation** button then runs the JOIN, grouping, subquery, view,
+and trigger examples against the current database. Its UPDATE and DELETE
+demonstrations run in transactions and roll back before returning results.
+
 The demo's audit events are transactional and disappear when their transaction
 rolls back. To observe row-lock contention, run the transaction and
 `SELECT ... FOR UPDATE` from the bookmark example in one MySQL session, then

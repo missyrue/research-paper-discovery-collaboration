@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 type Paper = { paper_id: number; title: string; venue: string | null; publication_year: number | null };
 type User = { name: string; email: string; role: "Admin" | "Researcher" };
+type EvaluationSection = { title: string; sql: string; rows: Record<string, string | number | null>[] };
 
 async function readApiResponse<T>(response: Response): Promise<T> {
   const body = await response.text();
@@ -26,6 +27,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [indexing, setIndexing] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [evaluation, setEvaluation] = useState<Record<string, EvaluationSection> | null>(null);
+  const [evaluationMessage, setEvaluationMessage] = useState("");
   const [message, setMessage] = useState("");
 
   async function load() {
@@ -130,6 +134,7 @@ export default function AdminPage() {
         model = result.model;
         setMessage(`Processed through paper ${result.nextAfterPaperId ?? "the end"}; embedded ${indexed}, skipped ${skipped} unchanged.`);
         if (result.done) break;
+        if (!result.nextAfterPaperId) throw new Error("The vector index API did not return a continuation paper ID.");
         afterPaperId = result.nextAfterPaperId;
       }
       setMessage(`Atlas sync complete: ${indexed} embedded or updated, ${skipped} unchanged, using ${model}.`);
@@ -138,8 +143,28 @@ export default function AdminPage() {
     } finally { setIndexing(false); }
   }
 
+  async function runEvaluation() {
+    setEvaluating(true);
+    setEvaluationMessage("");
+    try {
+      const response = await fetch("/api/admin/evaluation", { method: "POST" });
+      const result = await readApiResponse<{ error?: string; results?: Record<string, EvaluationSection>; writesRolledBack?: boolean }>(response);
+      if (!response.ok || !result.results) throw new Error(result.error ?? "Could not run the MySQL evaluation demo.");
+      setEvaluation(result.results);
+      setEvaluationMessage(result.writesRolledBack ? "Evaluation complete. The UPDATE and DELETE demos were rolled back; no paper changes were kept." : "Evaluation complete.");
+    } catch (error) {
+      setEvaluationMessage(error instanceof Error ? error.message : "Could not run the MySQL evaluation demo.");
+    } finally { setEvaluating(false); }
+  }
+
+  function renderEvaluationTable(rows: EvaluationSection["rows"]) {
+    if (!rows.length) return <p className="evaluation-empty">No matching rows in the current MySQL data.</p>;
+    const columns = Object.keys(rows[0]);
+    return <div className="evaluation-table-wrap"><table className="evaluation-table"><thead><tr>{columns.map((column) => <th key={column}>{column.replaceAll("_", " ")}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}>{String(row[column] ?? "—")}</td>)}</tr>)}</tbody></table></div>;
+  }
+
   return <main className="admin-page">
-    <header className="admin-header"><Link className="brand" href="/"><span className="brand-mark">a</span><span>atlas<span className="brand-dot">.</span></span></Link><div><Link href="/">Research search</Link>{user && <span> &nbsp;·&nbsp; {user.name} ({user.role}) &nbsp;·&nbsp; <button onClick={signOut}>Sign out</button></span>}</div></header>
+    <header className="admin-header"><Link className="brand" href="/" aria-label="Paperloom home"><span className="brand-mark">p</span><span>paperloom<span className="brand-dot">.</span></span></Link><div><Link href="/">Research search</Link>{user && <span> &nbsp;·&nbsp; {user.name} ({user.role}) &nbsp;·&nbsp; <button onClick={signOut}>Sign out</button></span>}</div></header>
     {loading ? <p>Checking your account…</p> : !user ? <section className="admin-panel"><h1>Admin sign-in required</h1><p>Sign in with an administrator account to manage the MySQL paper library.</p><Link className="auth-submit admin-link" href="/login">Go to sign in ↗</Link></section> : user.role !== "Admin" ? <section className="admin-panel"><h1>Access denied</h1><p>Your account has the Researcher role. Only an Admin can manage paper records.</p><Link href="/">Return to discovery</Link></section> : <>
       <section className="admin-panel"><div className="eyebrow">DATABASE ADMINISTRATION</div><h1>Paper library</h1><p>Add or remove paper records in MySQL. This page and its API require the Admin role.</p><p>Generate local embeddings with Ollama and sync papers to the Atlas vector collection (maximum 500 papers per run).</p><button type="button" className="admin-index-button" onClick={indexPapers} disabled={indexing}>{indexing ? "Indexing papers…" : "Sync papers to Atlas Vector Search"}</button>
         <form className="admin-form" onSubmit={addPaper}>
@@ -149,6 +174,10 @@ export default function AdminPage() {
           <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Saving…" : "Add paper to MySQL"}</button>
         </form>
         {message && <p role="status" className="admin-message">{message}</p>}
+      </section>
+      <section className="admin-panel evaluation-panel"><div className="eyebrow">DBMS EVALUATION</div><h2>Run SQL concept demo</h2><p>Execute live MySQL JOIN, GROUP BY, correlated/nested subquery, view, UPDATE, DELETE, and audit-trigger examples against the current paper data.</p><p>The UPDATE and DELETE examples run in transactions and are rolled back, so your paper records stay unchanged.</p><button type="button" className="admin-index-button" onClick={runEvaluation} disabled={evaluating}>{evaluating ? "Running SQL examples…" : "Run database evaluation"}</button>
+        {evaluationMessage && <p role="status" className="admin-message">{evaluationMessage}</p>}
+        {evaluation && <div className="evaluation-results">{Object.entries(evaluation).map(([key, section]) => <article className="evaluation-result" key={key}><h3>{section.title}</h3><pre><code>{section.sql}</code></pre>{renderEvaluationTable(section.rows)}</article>)}</div>}
       </section>
       <section className="admin-panel"><h2>Current records ({papers.length})</h2>{papers.map((paper) => <article className="admin-paper" key={paper.paper_id}><span><strong>#{paper.paper_id} · {paper.title}</strong><small>{paper.venue ?? "Venue not set"}{paper.publication_year ? ` · ${paper.publication_year}` : ""}</small></span><div><button type="button" onClick={() => renamePaper(paper)}>Edit title</button><button type="button" onClick={() => removePaper(paper.paper_id)}>Delete</button></div></article>)}</section>
     </>}

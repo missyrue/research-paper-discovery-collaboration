@@ -1,4 +1,4 @@
-# Atlas web application
+# Paperloom web application
 
 This is the Next.js App Router application for the Research Paper Discovery
 & Collaboration System. Keyword search uses local MySQL. Signed-in users can
@@ -33,6 +33,12 @@ After registering the account intended for administration, follow
 [`../../database/mysql/AUTHORIZATION.md`](../../database/mysql/AUTHORIZATION.md)
 to promote it using `promote-admin.sql`. Ordinary users cannot select or grant
 themselves the Admin role.
+
+The `/admin` page includes **Run database evaluation** for JOIN, GROUP BY,
+correlated/nested subqueries, the aggregate view, and trigger-backed UPDATE and
+DELETE examples. For an existing database, install the advanced objects with
+[`../../database/mysql/install-advanced.ps1`](../../database/mysql/install-advanced.ps1)
+before running the demo. The write examples run in transactions and roll back.
 
 ## Remaining work
 
