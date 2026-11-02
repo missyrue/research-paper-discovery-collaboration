@@ -11,9 +11,9 @@ $seedPath = Join-Path $PSScriptRoot 'seed.sql'
 $envPath = Join-Path $repoRoot 'apps\web\.env.local'
 $preservedVectorConfig = @()
 if (Test-Path -LiteralPath $envPath) {
-  $vectorConfigKeys = @('OPENAI_API_KEY', 'EMBEDDING_MODEL', 'EMBEDDING_DIMENSIONS', 'MONGODB_URI', 'MONGODB_DATABASE', 'MONGODB_COLLECTION', 'ATLAS_VECTOR_INDEX')
+  $optionalConfigKeys = @('MYSQL_SSL', 'MYSQL_SSL_CA', 'OPENAI_API_KEY', 'EMBEDDING_MODEL', 'EMBEDDING_DIMENSIONS', 'MONGODB_URI', 'MONGODB_DATABASE', 'MONGODB_COLLECTION', 'ATLAS_VECTOR_INDEX')
   foreach ($line in [System.IO.File]::ReadAllLines($envPath)) {
-    foreach ($key in $vectorConfigKeys) {
+    foreach ($key in $optionalConfigKeys) {
       if ($line.StartsWith("$key=")) { $preservedVectorConfig += $line; break }
     }
   }

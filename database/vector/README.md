@@ -18,9 +18,11 @@ ATLAS_VECTOR_INDEX=paper_embedding_index
 
 The driver is part of `apps/web/package.json`. Create an Atlas Vector Search index on the `paper_vectors` collection using [`atlas-vector-index.json`](atlas-vector-index.json). Its dimensions and similarity must match the configured embedding model (`1536` and `cosine` for the default model). The index maps the `embedding` vector and the `topics` and `embedding_model` filter fields.
 
+Search text and paper titles/abstracts are sent to OpenAI to create embeddings. Do not index private or licensed text unless your data-sharing terms allow it. Signed-in accounts have a persistent limit of 30 semantic searches per UTC day; the counter is stored in MySQL.
+
 ## Index the MySQL library
 
-Start the Next.js app, sign in using an account with the Admin role, and open `http://localhost:3000/admin`. Select **Sync papers to Atlas Vector Search**. The protected API reads at most 500 papers from MySQL, embeds each title plus abstract, and upserts a vector document keyed by the decimal-string MySQL `paper_id`. Re-running it refreshes existing documents rather than duplicating them. The embedding provider may bill for the request.
+Start the Next.js app, sign in using an account with the Admin role, and open `http://localhost:3000/admin`. Select **Sync papers to Atlas Vector Search**. The protected API scans the MySQL library in keyset-paginated batches of 50, embeds each changed title plus abstract, and upserts a vector document keyed by the decimal-string MySQL `paper_id`. Re-running it skips documents whose content hash and embedding model are unchanged. The embedding provider may bill for new or changed papers.
 
 Each Atlas document stores:
 

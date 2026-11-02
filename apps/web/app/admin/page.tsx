@@ -49,7 +49,7 @@ export default function AdminPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not add paper.");
       formElement.reset();
-      setMessage("Paper added to MySQL.");
+      setMessage("Paper added to MySQL. Run Atlas sync to include it in semantic search.");
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not add paper.");
@@ -65,7 +65,7 @@ export default function AdminPage() {
     const result = await response.json();
     if (!response.ok) { setMessage(result.error ?? "Could not delete paper."); return; }
     setPapers((current) => current.filter((paper) => paper.paper_id !== paperId));
-    setMessage("Paper deleted from MySQL.");
+    setMessage(result.vectorRemoved ? "Paper deleted from MySQL and Atlas." : "Paper deleted from MySQL, but Atlas cleanup failed. Retry Atlas sync after checking the connection.");
   }
 
   async function renamePaper(paper: Paper) {
@@ -77,7 +77,7 @@ export default function AdminPage() {
     const result = await response.json();
     if (!response.ok) { setMessage(result.error ?? "Could not update paper."); return; }
     setPapers((current) => current.map((row) => row.paper_id === paper.paper_id ? { ...row, title } : row));
-    setMessage("Paper title updated in MySQL.");
+    setMessage(result.vectorInvalidated ? "Paper updated in MySQL. Run Atlas sync to recreate its embedding." : "Paper updated in MySQL, but its old Atlas vector could not be cleared. Check Atlas, then sync again.");
   }
 
   async function signOut() {
@@ -87,14 +87,29 @@ export default function AdminPage() {
   }
 
   async function indexPapers() {
-    if (!window.confirm("Generate embeddings for up to 500 MySQL papers and upsert them to MongoDB Atlas? The embedding provider may charge for usage.")) return;
+    if (!window.confirm("Generate embeddings for all MySQL papers and upsert them to MongoDB Atlas? The embedding provider may charge for usage.")) return;
     setIndexing(true);
     setMessage("");
     try {
-      const response = await fetch("/api/admin/vector-index", { method: "POST" });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Could not index papers.");
-      setMessage(`Indexed ${result.indexed} papers in Atlas using ${result.model}.`);
+      let afterPaperId = "0";
+      let indexed = 0;
+      let skipped = 0;
+      let model = "";
+      while (true) {
+        const response = await fetch("/api/admin/vector-index", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ afterPaperId }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not index papers.");
+        indexed += result.indexed;
+        skipped += result.skipped;
+        model = result.model;
+        setMessage(`Processed through paper ${result.nextAfterPaperId ?? "the end"}; embedded ${indexed}, skipped ${skipped} unchanged.`);
+        if (result.done) break;
+        afterPaperId = result.nextAfterPaperId;
+      }
+      setMessage(`Atlas sync complete: ${indexed} embedded or updated, ${skipped} unchanged, using ${model}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not index papers.");
     } finally { setIndexing(false); }

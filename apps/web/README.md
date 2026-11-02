@@ -40,3 +40,12 @@ themselves the Admin role.
 
 The Admin paper API verifies the current role from MySQL on every request and
 returns 401 to signed-out users and 403 to Researchers.
+
+## Publishing
+
+The MySQL server on a developer laptop is only for local use; a public deployment
+needs a reachable managed MySQL database and Atlas cluster. Configure the
+deployment's secret environment variables (`MYSQL_*`, `AUTH_SECRET`,
+`OPENAI_API_KEY`, and `MONGODB_*`) in the hosting provider. Enable `MYSQL_SSL=true`
+and provide the provider CA when required. Restrict database network access to
+the app host and never expose MySQL port 3306 to the whole Internet.

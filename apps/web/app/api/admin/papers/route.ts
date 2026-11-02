@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { getCurrentUser } from "@/lib/authorization";
 import { getDbPool } from "@/lib/db";
+import { getPaperVectorCollection } from "@/lib/vector-db";
 
 export const runtime = "nodejs";
 
@@ -98,8 +99,14 @@ export async function PATCH(request: Request) {
     if (!fields.length) return NextResponse.json({ error: "Provide at least one paper field to update." }, { status: 400 });
     values.push(Number(input.paperId));
     const [result] = await getDbPool().execute<ResultSetHeader>(`UPDATE papers SET ${fields.join(", ")} WHERE paper_id = ?`, values);
-    if (result.affectedRows === 0) return NextResponse.json({ error: "Paper was not found or no values changed." }, { status: 404 });
-    return NextResponse.json({ ok: true });
+    if (result.affectedRows === 0) {
+      const [rows] = await getDbPool().execute<RowDataPacket[]>("SELECT 1 FROM papers WHERE paper_id = ? LIMIT 1", [Number(input.paperId)]);
+      if (!rows.length) return NextResponse.json({ error: "Paper was not found." }, { status: 404 });
+    }
+    let vectorInvalidated = true;
+    try { await (await getPaperVectorCollection()).deleteOne({ paper_id: String(input.paperId) }); }
+    catch (error) { vectorInvalidated = false; console.warn("Could not invalidate the changed paper vector; run Atlas sync:", error); }
+    return NextResponse.json({ ok: true, vectorInvalidated });
   } catch (error) {
     if ((error as { code?: string }).code === "ER_DUP_ENTRY") return NextResponse.json({ error: "A paper with that DOI already exists." }, { status: 409 });
     if (error instanceof SyntaxError) return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
@@ -118,7 +125,10 @@ export async function DELETE(request: Request) {
     }
     const [result] = await getDbPool().execute<ResultSetHeader>("DELETE FROM papers WHERE paper_id = ?", [Number(input.paperId)]);
     if (result.affectedRows === 0) return NextResponse.json({ error: "Paper was not found." }, { status: 404 });
-    return NextResponse.json({ ok: true });
+    let vectorRemoved = true;
+    try { await (await getPaperVectorCollection()).deleteOne({ paper_id: String(input.paperId) }); }
+    catch (error) { vectorRemoved = false; console.warn("Could not remove the deleted paper vector; run Atlas sync:", error); }
+    return NextResponse.json({ ok: true, vectorRemoved });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
     console.error("Admin paper deletion failed:", error);
