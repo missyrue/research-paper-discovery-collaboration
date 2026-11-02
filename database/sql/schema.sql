@@ -83,16 +83,3 @@ CREATE TABLE discussions (
 
 CREATE INDEX idx_papers_year ON papers(publication_year);
 CREATE INDEX idx_discussions_paper_time ON discussions(paper_id, created_at DESC);
-
--- Example: keyword search, newest papers first.
-SELECT paper_id, title, publication_year, venue
-FROM papers
-WHERE title ILIKE '%' || :query || '%' OR abstract ILIKE '%' || :query || '%'
-ORDER BY publication_year DESC NULLS LAST
-LIMIT 20;
-
--- Example: transactional bookmark insert (idempotent).
-INSERT INTO bookmarks (user_id, paper_id, collection_id)
-VALUES (:user_id, :paper_id, :collection_id)
-ON CONFLICT (user_id, paper_id) DO UPDATE
-SET collection_id = EXCLUDED.collection_id;

@@ -1,15 +1,11 @@
 -- Example PostgreSQL queries for the relational database.
 -- Bind parameters in the application layer; never build SQL by concatenating user input.
 
--- 1. Search titles and abstracts, with optional year bounds.
+-- 1. Ranked full-text search using the GIN index created by
+-- advanced_concepts.sql; also supports optional year bounds.
 -- $1 = search phrase, $2 = earliest year (nullable), $3 = latest year (nullable)
-SELECT p.paper_id, p.title, p.publication_year, p.venue
-FROM papers AS p
-WHERE (p.title ILIKE '%' || $1 || '%' OR p.abstract ILIKE '%' || $1 || '%')
-  AND ($2::smallint IS NULL OR p.publication_year >= $2)
-  AND ($3::smallint IS NULL OR p.publication_year <= $3)
-ORDER BY p.publication_year DESC NULLS LAST, p.paper_id DESC
-LIMIT 20;
+SELECT *
+FROM search_papers($1, $2::smallint, $3::smallint, 20);
 
 -- 2. Fetch a paper and its authors in author order.
 SELECT p.paper_id, p.title, p.abstract, p.doi, p.publication_year,
@@ -30,14 +26,11 @@ LEFT JOIN collections AS c
 WHERE b.user_id = $1
 ORDER BY b.saved_at DESC;
 
--- 4. Save a bookmark idempotently. In a transaction, first verify that the
--- collection belongs to the current user (or pass NULL for no collection).
+-- 4. Save a bookmark idempotently with RLS and collection ownership checks.
+-- $1 = authenticated user id, $2 = paper id, $3 = owned collection id (nullable)
 BEGIN;
-INSERT INTO bookmarks (user_id, paper_id, collection_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, paper_id) DO UPDATE
-SET collection_id = EXCLUDED.collection_id,
-    saved_at = CURRENT_TIMESTAMP;
+SELECT set_config('app.user_id', $1::text, true);
+SELECT save_paper_bookmark($1, $2, $3);
 COMMIT;
 
 -- 5. Show group members.
