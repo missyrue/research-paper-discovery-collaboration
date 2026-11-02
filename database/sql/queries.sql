@@ -1,11 +1,8 @@
--- Example PostgreSQL queries for the relational database.
--- Bind parameters in the application layer; never build SQL by concatenating user input.
+-- MySQL 8 examples for the relational database.
+-- Bind each ? value in the application layer; never concatenate user input.
 
--- 1. Ranked full-text search using the GIN index created by
--- advanced_concepts.sql; also supports optional year bounds.
--- $1 = search phrase, $2 = earliest year (nullable), $3 = latest year (nullable)
-SELECT *
-FROM search_papers($1, $2::smallint, $3::smallint, 20);
+-- 1. Ranked full-text search using the FULLTEXT index and stored procedure.
+CALL sp_search_papers(?, NULL, NULL, 20);
 
 -- 2. Fetch a paper and its authors in author order.
 SELECT p.paper_id, p.title, p.abstract, p.doi, p.publication_year,
@@ -13,7 +10,7 @@ SELECT p.paper_id, p.title, p.abstract, p.doi, p.publication_year,
 FROM papers AS p
 LEFT JOIN paper_authors AS pa ON pa.paper_id = p.paper_id
 LEFT JOIN authors AS a ON a.author_id = pa.author_id
-WHERE p.paper_id = $1
+WHERE p.paper_id = ?
 ORDER BY pa.author_order;
 
 -- 3. List a researcher's saved papers and optional collection.
@@ -23,42 +20,37 @@ FROM bookmarks AS b
 JOIN papers AS p ON p.paper_id = b.paper_id
 LEFT JOIN collections AS c
   ON c.collection_id = b.collection_id AND c.owner_id = b.user_id
-WHERE b.user_id = $1
+WHERE b.user_id = ?
 ORDER BY b.saved_at DESC;
 
--- 4. Save a bookmark idempotently with RLS and collection ownership checks.
--- $1 = authenticated user id, $2 = paper id, $3 = owned collection id (nullable)
-BEGIN;
-SELECT set_config('app.user_id', $1::text, true);
-SELECT save_paper_bookmark($1, $2, $3);
+-- 4. Save a bookmark idempotently. The caller's transaction holds the
+-- collection ownership row lock through commit; use NULL for the default library.
+START TRANSACTION;
+CALL sp_save_paper_bookmark(?, ?, ?);
 COMMIT;
 
 -- 5. Show group members.
 SELECT u.user_id, u.full_name, gm.member_role, gm.joined_at
 FROM group_members AS gm
 JOIN users AS u ON u.user_id = gm.user_id
-WHERE gm.group_id = $1
+WHERE gm.group_id = ?
 ORDER BY gm.joined_at, u.full_name;
 
 -- 6. Show the latest discussion entries for a paper.
 SELECT d.discussion_id, d.body, d.created_at, u.user_id, u.full_name
 FROM discussions AS d
 JOIN users AS u ON u.user_id = d.author_id
-WHERE d.paper_id = $1
+WHERE d.paper_id = ?
 ORDER BY d.created_at DESC
 LIMIT 50;
 
 -- 7. Add an author and associate the author with a paper.
--- The unique constraints make repeated imports safe.
-BEGIN;
+START TRANSACTION;
 INSERT INTO authors (display_name)
-VALUES ($1)
-ON CONFLICT (display_name) DO UPDATE
-SET display_name = EXCLUDED.display_name
-RETURNING author_id;
--- Use the returned author_id and the chosen author_order in the next statement.
+VALUES (?)
+ON DUPLICATE KEY UPDATE author_id = LAST_INSERT_ID(author_id);
+SET @author_id = LAST_INSERT_ID();
 INSERT INTO paper_authors (paper_id, author_id, author_order)
-VALUES ($2, $3, $4)
-ON CONFLICT (paper_id, author_id) DO UPDATE
-SET author_order = EXCLUDED.author_order;
+VALUES (?, @author_id, ?)
+ON DUPLICATE KEY UPDATE author_order = VALUES(author_order);
 COMMIT;

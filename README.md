@@ -1,6 +1,6 @@
 # Research Paper Discovery & Collaboration System
 
-A DBMS mini project proposal for an integrated platform that helps researchers discover academic papers, organize reading lists, and collaborate around research topics. The system combines relational data management with semantic similarity search so that related papers can be found even when they use different terminology.
+Atlas is a DBMS project for discovering academic papers with MySQL keyword search and optional MongoDB Atlas vector similarity search. MySQL stores canonical paper and user records; Atlas stores embeddings and returns semantically ranked paper IDs.
 
 
 ## Team
@@ -14,7 +14,7 @@ A DBMS mini project proposal for an integrated platform that helps researchers d
 
 Researchers often search across large collections of papers using exact keywords. A paper that discusses the same idea with different terminology can be difficult to find. Paper discovery, bookmarking, reading-list organization, and research discussion are also commonly spread across separate tools.
 
-This project proposes one place to search and filter papers, retrieve semantically related work, save papers into collections, record research interests, form groups, and discuss papers with collaborators.
+The current app searches and filters a seeded MySQL paper library, supports researcher accounts and admin-controlled paper management, and includes a semantic retrieval path backed by Atlas and OpenAI embeddings. Saved-paper persistence, collections, and research collaboration remain future work.
 
 ## Proposed Features
 
@@ -32,34 +32,36 @@ This project proposes one place to search and filter papers, retrieve semantical
 | Layer | Technology | Purpose |
 |---|---|---|
 | Web application | Next.js App Router, React, TypeScript | User interface and application routes |
-| Relational database | PostgreSQL | Users, roles, papers, authors, bookmarks, collections, groups, and discussions |
+| Relational database | MySQL 8 | Users, roles, papers, authors, bookmarks, collections, groups, and discussions |
 | Vector database | MongoDB Atlas Vector Search | Store paper embeddings and retrieve semantically similar papers |
-| Embeddings | To be selected | Convert paper text and search queries to vectors |
+| Embeddings | OpenAI `text-embedding-3-small` | Convert paper title/abstract and queries to 1536-dimensional vectors |
 
-These are proposed implementation choices for the project. They are not all configured in this initial repository scaffold.
+The Atlas and embedding credentials are per-developer secrets in ignored `apps/web/.env.local`; they are not checked into this repository.
 
 ## Repository Contents
 
 ```text
 .
 ├── apps/
-│   └── web/                         # Next.js discovery interface prototype
+│   └── web/                         # Next.js discovery app and MySQL API
 ├── database/
-│   ├── sql/schema.sql                # PostgreSQL tables, constraints, indexes, sample queries
+│   ├── mysql/                        # MySQL schema, seed data, advanced concepts, and local setup
+│   ├── sql/schema.sql                # SQL relational schema
 │   ├── sql/queries.sql               # Parameterized application query examples
 │   └── vector/                        # Atlas Vector Search setup and demo
 ├── docs/
 │   └── DBMS_PROJECT_REPORT.md        # DBMS mini project report
 └── screenshots/
-    ├── paper-discovery-mockup.svg    # Illustrative UI concept
-    └── code-integration-mockup.svg   # Illustrative architecture/code concept
+    ├── atlas-discovery-mysql.png     # App search page
+    ├── atlas-paper-results.png      # MySQL result cards
+    └── atlas-login-prototype.png    # Earlier sign-in UI capture
 ```
 
-The SVG images are mockups for the report, not screenshots of a running application. Replace them with real application and code captures after implementation.
+The report uses the supplied captures of the running discovery interface. The sign-in capture is from the earlier UI prototype and is not evidence of a successful login.
 
 ## Database Design
 
-The PostgreSQL schema in [`database/sql/schema.sql`](database/sql/schema.sql) defines relational structures for:
+The local app uses MySQL 8. Apply [`database/mysql/schema.sql`](database/mysql/schema.sql) and [`database/mysql/seed.sql`](database/mysql/seed.sql) using [`database/mysql/setup-local.ps1`](database/mysql/setup-local.ps1). This creates the relational structures for:
 
 - Users and roles
 - Papers, authors, and paper-author ordering
@@ -68,17 +70,17 @@ The PostgreSQL schema in [`database/sql/schema.sql`](database/sql/schema.sql) de
 - Research groups and group members
 - Paper discussions
 
-Primary keys, foreign keys, uniqueness constraints, check constraints, and indexes help maintain data integrity and support common lookups. Example SQL is included for keyword search and idempotent bookmarking.
+Primary keys, foreign keys, uniqueness constraints, check constraints, and indexes help maintain data integrity and support common lookups. MySQL commands are also included in `database/sql/` for the report.
 
-The advanced PostgreSQL layer in [`database/sql/advanced_concepts.sql`](database/sql/advanced_concepts.sql) implements full-text search with a GIN index, stored functions, paper-change audit triggers, row-level security for bookmarks, and serializable transaction/row-lock examples. Run the seed and demo scripts using the instructions in [`database/sql/ADVANCED_CONCEPTS.md`](database/sql/ADVANCED_CONCEPTS.md) to see each concept against sample data.
+The database layer also demonstrates five advanced concepts: a FULLTEXT index used by the app's keyword search, stored procedures for ranked search and safe bookmark writes, update/delete audit triggers, a paper-engagement view, and InnoDB transactions with row locking. See [`database/mysql/ADVANCED_CONCEPTS.md`](database/mysql/ADVANCED_CONCEPTS.md) for the runnable demo.
 
-The MongoDB example in [`database/vector/atlas-vector-search.js`](database/vector/atlas-vector-search.js) shows a proposed vector document and `$vectorSearch` aggregation. It uses placeholders: real vectors must be generated using a selected embedding model, and the Atlas vector index must be configured with the matching dimensions. PostgreSQL remains the source of truth for paper records; vector search results should be resolved to the corresponding relational records.
+The app's semantic mode embeds a query, retrieves ranked paper IDs through Atlas `$vectorSearch`, and resolves paper details from MySQL. Admins can sync embeddings from the MySQL library using `/admin`. Atlas must have the configured vector index, and `OPENAI_API_KEY` and `MONGODB_URI` must be configured before this mode will run. MySQL remains the source of truth for paper records.
 
-See [`database/vector/README.md`](database/vector/README.md) for the vector index definition, ingestion/search example, and a small semantic retrieval demo plan. The example deliberately accepts embeddings from an external model adapter rather than choosing a provider or embedding dimensions for the project.
+See [`database/vector/README.md`](database/vector/README.md) for configuration, Atlas index creation, embedding ingestion, and semantic search steps.
 
 ## Next.js Application
 
-The initial Next.js App Router prototype is in [`apps/web`](apps/web/README.md). It includes a responsive paper discovery screen with sample records, topic filters, save interactions, and a sign-in screen. Search results and account actions are currently local demo UI; connect PostgreSQL and an authentication service before using real accounts or papers.
+The Next.js App Router interface is in [`apps/web`](apps/web/README.md). Paper search and topic filtering use a parameterized MySQL API route backed by the FULLTEXT index and seeded sample records. Registration assigns the Researcher role; Admin-only APIs and the `/admin` page manage paper records. Passwords use scrypt hashes and sessions use signed HTTP-only cookies. Saving papers remains local to the browser.
 
 ```bash
 cd apps/web
@@ -86,20 +88,27 @@ npm install
 npm run dev
 ```
 
-The app uses the Next.js App Router with TypeScript. Follow the official [Next.js authentication guide](https://nextjs.org/docs/app/guides/authentication) when wiring the sign-in screen to the database and a secure session implementation.
+Before the first run, from the repository root create the local database and
+ignored app credentials with
+`powershell -ExecutionPolicy Bypass -File database/mysql/setup-local.ps1 -Port 3306`.
+The script prompts for the MySQL admin password and writes app credentials to
+`apps/web/.env.local`.
+
+To set up the two roles, follow [`database/mysql/AUTHORIZATION.md`](database/mysql/AUTHORIZATION.md). After registering an account, a MySQL administrator promotes the trusted account using the edited `database/mysql/promote-admin.sql` file. Admin-only paper operations are available at `/admin`.
+
+The app uses the Next.js App Router with TypeScript, the `mysql2` driver, and the MongoDB Node driver. Persisted bookmarks and collaboration features remain future work.
 
 ## Project Report
 
-See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the required report sections: title, student details, abstract, tech stack, SQL commands, vector database commands, proposed Next.js tree, and screenshot/mockup section.
+See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the required report sections: title, student details, abstract, tech stack, SQL commands, vector database commands, Next.js tree, and screenshots.
 
 ## Future Work
 
-1. Implement the Next.js interface and authentication.
-2. Configure PostgreSQL and apply the schema.
-3. Select an embedding model and create a paper/query embedding pipeline.
-4. Configure MongoDB Atlas Vector Search and connect semantic results to PostgreSQL paper records.
-5. Build collection, group, collaboration, and discussion workflows.
-6. Capture genuine screenshots from the working application and update the report.
+1. Verify registration and sign-in against the local MySQL instance.
+2. Persist bookmarks and collections for signed-in users.
+3. Configure Atlas and OpenAI credentials and verify vector ingestion/search on the target environment.
+4. Persist bookmarks and collections for signed-in users.
+5. Build research-group, collaboration, and discussion workflows.
 
 ## Resume Project Name
 
@@ -113,7 +122,7 @@ The work is divided into two comparable database-focused tracks so each student 
 
 | Student | Owned work | Files / deliverables |
 |---|---|---|
-| Aaruni Choudhary (PES2UG24CS013) | Relational data model: PostgreSQL tables, keys, constraints, indexes, and application query examples | `database/sql/schema.sql`, `database/sql/queries.sql` |
+| Aaruni Choudhary (PES2UG24CS013) | Relational data model: MySQL tables, keys, constraints, indexes, and application query examples | `database/mysql/`, `database/sql/schema.sql`, `database/sql/queries.sql` |
 | Anchita Chhibba (PES2UG24CS060) | Semantic retrieval: vector document model, Atlas index configuration, embedding ingestion/search examples, and semantic-search evaluation/demo | `database/vector/`, semantic retrieval documentation and demo evidence |
 
 Each student should commit their own work under their GitHub identity after reviewing it. The relational and vector tracks can be developed independently and integrated through the shared `paper_id` identifier.

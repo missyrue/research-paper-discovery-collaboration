@@ -1,84 +1,48 @@
-# Semantic retrieval with MongoDB Atlas Vector Search
+# MongoDB Atlas Vector Search
 
-This example stores vectors for paper abstracts in MongoDB Atlas and uses
-`$vectorSearch` to return papers whose content is semantically close to a
-research query. PostgreSQL remains the source of truth for paper records.
+The Next.js app has a semantic-search path backed by MongoDB Atlas Vector Search. MySQL remains the authoritative source for papers, authors, and topics. The app sends paper title/abstract and search text to the OpenAI Embeddings API using `text-embedding-3-small` (1536 dimensions), stores paper embeddings in Atlas, uses cosine vector search to rank paper IDs, and loads the matching canonical paper rows from MySQL.
 
-## Vector document
+## Configure local credentials
 
-Each `paper_vectors` document has this shape:
+Add these values to the ignored `apps/web/.env.local` file. Do not commit this file or paste credentials into GitHub/chat.
+
+```dotenv
+OPENAI_API_KEY=your-embedding-api-key
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+MONGODB_URI=mongodb+srv://...
+MONGODB_DATABASE=research_papers
+MONGODB_COLLECTION=paper_vectors
+ATLAS_VECTOR_INDEX=paper_embedding_index
+```
+
+The driver is part of `apps/web/package.json`. Create an Atlas Vector Search index on the `paper_vectors` collection using [`atlas-vector-index.json`](atlas-vector-index.json). Its dimensions and similarity must match the configured embedding model (`1536` and `cosine` for the default model). The index maps the `embedding` vector and the `topics` and `embedding_model` filter fields.
+
+## Index the MySQL library
+
+Start the Next.js app, sign in using an account with the Admin role, and open `http://localhost:3000/admin`. Select **Sync papers to Atlas Vector Search**. The protected API reads at most 500 papers from MySQL, embeds each title plus abstract, and upserts a vector document keyed by the decimal-string MySQL `paper_id`. Re-running it refreshes existing documents rather than duplicating them. The embedding provider may bill for the request.
+
+Each Atlas document stores:
 
 ```json
 {
   "paper_id": "42",
   "title": "Example paper title",
-  "abstract": "Abstract text used to create the embedding.",
+  "abstract": "Text used to create the embedding.",
   "publication_year": 2024,
+  "topics": ["Machine learning"],
   "embedding": [0.012, -0.034],
-  "embedding_model": "provider/model-version",
+  "embedding_model": "text-embedding-3-small",
   "updated_at": "2026-11-02T00:00:00.000Z"
 }
 ```
 
-The two values in the snippet are illustrative only. A real vector must have
-the selected embedding model's full dimensionality. `paper_id` is stored as a
-decimal string so PostgreSQL `BIGINT` identifiers are not rounded by
-JavaScript. The application uses this identifier to fetch canonical paper
-details and authors from PostgreSQL.
+The embedding array above is abbreviated and illustrative, not a real 1536-value vector.
 
-## Create the Atlas Search index
+## Use semantic search
 
-Create a Vector Search index on the `paper_vectors` collection using
-[`atlas-vector-index.json`](atlas-vector-index.json). Its `numDimensions` value
-must match the embedding model. The checked-in value of 1536 is a configuration
-example; change it together with `EMBEDDING_DIMENSIONS` for the chosen model.
-The index includes optional filters for publication year and model version.
+Sign in as a Researcher or Admin, select **Semantic vectors** on the discovery page, and submit a query. The app embeds the query text, searches the Atlas index by cosine similarity, applies selected topic filters in Atlas, then fetches the matching papers/authors/tags from MySQL while preserving vector ranking. Keyword mode continues to use MySQL `LIKE` matching and does not require Atlas or the embedding API key.
 
-## Run the example
+The search route is `apps/web/app/api/papers/route.ts`; embedding requests are handled in `apps/web/lib/embeddings.ts`; MongoDB access and vector aggregation are in `apps/web/lib/vector-db.ts`; the admin-only indexing endpoint is `apps/web/app/api/admin/vector-index/route.ts`.
 
-From this directory, install the MongoDB Node.js driver in the project
-environment and provide:
-
-```sh
-export MONGODB_URI='mongodb+srv://...'
-export MONGODB_DATABASE='research_papers'
-export MONGODB_COLLECTION='paper_vectors'
-export ATLAS_VECTOR_INDEX='paper_embedding_index'
-export EMBEDDING_DIMENSIONS='1536'
-```
-
-Implement `embedding-adapter.js` with the selected embedding service. It must
-export `embedText(text)`, returning an array of finite numbers of the configured
-dimension. The adapter is intentionally not checked in because the project has
-not selected an embedding model or provider.
-
-In application code, call `upsertPaperEmbedding(collection, paper, embedding)`
-after importing or updating a paper in PostgreSQL, then call
-`findSimilarPapers(collection, queryEmbedding, { limit: 10 })` for a search.
-The runnable query entry point is:
-
-```sh
-node atlas-vector-search.js "graph neural networks for molecular property prediction"
-```
-
-The code validates vector dimensions, upserts by `paper_id` to avoid duplicate
-documents, bounds result count, and returns Atlas similarity scores. Production
-ingestion should also remove or refresh vector documents when the source paper
-is deleted or its abstract changes.
-
-## Small semantic-search evaluation/demo
-
-Use a fixed toy corpus with these topics:
-
-| Paper summary | Query expected to retrieve it |
-|---|---|
-| Graph neural networks estimate molecular properties from molecular structure. | Predicting chemical properties with graph models |
-| Transformer models summarize long clinical notes for hospital discharge. | Automatic summarization of patient records |
-| Satellite images are analyzed to identify crop stress and estimate yield. | Remote sensing for agricultural monitoring |
-
-For each query, record the top five `paper_id` values and scores, then check
-whether the matching paper appears in the top five. Report `hits / queries` as
-Recall@5. Compare with the PostgreSQL keyword query on the same query set to
-show where semantic retrieval can find related wording. This is a demonstration
-plan, not measured performance: scores depend on the selected model, corpus,
-and Atlas index configuration.
+If semantic search is unavailable, check that the Atlas cluster is reachable from the network, the URI user has read/write access to the selected database, the vector index is active, and all environment variable names match. Never expose API keys in screenshots or logs.
