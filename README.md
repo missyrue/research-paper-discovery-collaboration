@@ -2,7 +2,6 @@
 
 A DBMS mini project proposal for an integrated platform that helps researchers discover academic papers, organize reading lists, and collaborate around research topics. The system combines relational data management with semantic similarity search so that related papers can be found even when they use different terminology.
 
-> **Project status:** This repository currently contains the initial database design, example SQL and vector-search commands, and report mockups. The Next.js application, PostgreSQL integration, MongoDB Atlas integration, and embedding pipeline are planned work and are not yet implemented.
 
 ## Team
 
