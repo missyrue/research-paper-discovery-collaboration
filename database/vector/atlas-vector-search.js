@@ -1,6 +1,5 @@
-// MongoDB Atlas Vector Search example for paper abstracts.
-// Run with Node.js after installing the `mongodb` package and setting the
-// environment variables described in README.md in this directory.
+// Standalone MongoDB Atlas Vector Search reference fragment. The integrated
+// Next.js path is implemented in apps/web/lib/vector-db.ts and the API routes.
 
 import { MongoClient } from "mongodb";
 
@@ -23,7 +22,7 @@ function validateVector(vector, label = "embedding") {
 }
 
 // The caller supplies embeddings from the selected model. Keep paper_id aligned
-// with PostgreSQL's BIGINT key; this example stores it as a decimal string to
+// with MySQL's BIGINT key; this example stores it as a decimal string to
 // avoid JavaScript's unsafe integer range.
 export async function upsertPaperEmbedding(collection, paper, embedding) {
   if (!paper?.paperId || !paper?.title || typeof paper.abstract !== "string") {
@@ -74,21 +73,4 @@ export async function findSimilarPapers(collection, queryEmbedding, { limit = 10
       },
     },
   ]).toArray();
-}
-
-// This runnable entry point expects a local embedding adapter to provide
-// `embedText(text)`; the project has not selected a model/provider yet.
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  const { embedText } = await import("./embedding-adapter.js");
-  const client = new MongoClient(uri);
-  try {
-    await client.connect();
-    const collection = client.db(databaseName).collection(collectionName);
-    const query = process.argv.slice(2).join(" ");
-    if (!query) throw new Error('Usage: node atlas-vector-search.js "search text"');
-    const results = await findSimilarPapers(collection, await embedText(query));
-    console.log(JSON.stringify(results, null, 2));
-  } finally {
-    await client.close();
-  }
 }

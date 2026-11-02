@@ -9,6 +9,7 @@
         "numDimensions": 1536,
         "similarity": "cosine"
       },
+      { "type": "filter", "path": "topics" },
       { "type": "filter", "path": "publication_year" },
       { "type": "filter", "path": "embedding_model" }
     ]
