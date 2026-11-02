@@ -1,4 +1,4 @@
--- MySQL 8 examples for the relational database.
+-- MySQL 8 query statements for the relational database.
 -- Bind each ? value in the application layer; never concatenate user input.
 
 -- 1. Ranked full-text search using the FULLTEXT index and stored procedure.

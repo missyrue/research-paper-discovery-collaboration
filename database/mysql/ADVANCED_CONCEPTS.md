@@ -1,21 +1,27 @@
-# Advanced MySQL concepts
+# Advanced MySQL 8 evaluation examples
 
-The advanced SQL scripts implement and demonstrate five concepts against the
-project's MySQL 8 schema:
+The scripts in this folder implement database objects and provide runnable SQL
+examples against the project's MySQL 8 schema. `advanced_concepts.sql` creates
+the audit table, update/delete triggers, ranked-search and bookmark procedures,
+engagement view, and ensures the paper FULLTEXT index exists. The web app uses
+the FULLTEXT index for keyword search. The demo SQL examples are evaluation
+queries; the app does not call the bookmark procedure or engagement view.
 
-| Concept | Implementation | Demonstration |
-|---|---|---|
-| Full-text indexing | InnoDB `FULLTEXT` index on paper title and abstract; the app uses `MATCH ... AGAINST` | `EXPLAIN` and the keyword-search route |
-| Stored procedures | Ranked search and ownership-checked bookmark writes | `CALL sp_search_papers(...)` and `CALL sp_save_paper_bookmark(...)` |
-| Audit triggers | Update/delete triggers write old/new paper values to JSON | Update a paper in a transaction, inspect the audit row, then roll back |
-| Views | `v_paper_engagement` joins papers to authors and bookmark totals | Select from the view |
-| Transactions and row locks | InnoDB transaction with `SELECT ... FOR UPDATE` | Run the bookmark demo; a competing update waits until rollback |
+| Required concept | Runnable example |
+|---|---|
+| JOIN | Papers, ordered authors, and author names |
+| GROUP BY with aggregate | Paper author counts using `COUNT` |
+| UPDATE | Modify a sample abstract inside a transaction |
+| DELETE | Delete a sample paper inside a transaction |
+| Correlated/nested subqueries | Papers with above-average author counts |
+| Triggers | Update/delete triggers record old/new JSON values in the audit table |
+| Additional implemented concepts | FULLTEXT index, stored procedures, view, transactions, and `SELECT ... FOR UPDATE` |
 
-## Run on another system
+## Run from the repository root
 
-Use MySQL 8 with InnoDB. From a terminal at the repository root, the following
-commands create a fresh local demo database and load the project schema, sample
-papers, routines, triggers, and demo user:
+These commands work with the MySQL command-line client on macOS, Linux, or
+Windows. The demo assumes the project's sample records and user roles are
+loaded. The `UPDATE`, `DELETE`, and bookmark writes each end with `ROLLBACK`.
 
 ```sh
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS atlas_research CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
@@ -27,25 +33,20 @@ mysql -u root -p atlas_research < database/mysql/advanced_concepts_demo_seed.sql
 mysql -u root -p atlas_research < database/mysql/advanced_concepts_demo.sql
 ```
 
-On PowerShell, use a pipeline such as
+PowerShell users can run each SQL file with
 `Get-Content -Raw database/mysql/schema.sql | mysql -u root -p atlas_research`
-for each SQL file instead of the `< file` redirection syntax. The project's
-Windows setup script also installs these advanced objects automatically.
+(substitute each file path). The Windows app setup script
+`database/mysql/setup-local.ps1` automatically loads the schema, sample data,
+advanced objects, and demo seed, then grants the app user `EXECUTE` on the two
+stored procedures.
 
-The demo script can also be run as the app user after granting it `EXECUTE` on
-both procedures and the needed table permissions:
+The demo's audit events are transactional and disappear when their transaction
+rolls back. To observe row-lock contention, run the transaction and
+`SELECT ... FOR UPDATE` from the bookmark example in one MySQL session, then
+try updating that same paper in another session before rolling back.
 
-```sh
-mysql -u atlas_app -p atlas_research < database/mysql/advanced_concepts_demo.sql
-```
-
-The demo update and bookmark are rolled back. To see row-lock contention,
-start the transaction and `SELECT ... FOR UPDATE` from the demo in one MySQL
-session, then attempt an `UPDATE papers ...` for that same `paper_id` in another
-session before rolling the first transaction back.
-
-The sample user has a placeholder `password_hash` value that cannot be used to
-sign in. For app requests, derive `p_user_id` from the verified server session;
-never accept the user id from an untrusted browser parameter. The bookmark
-procedure checks collection ownership and locks the collection row until the
-caller commits or rolls back.
+The demo account has a placeholder password hash and cannot sign in. In
+application code, derive the bookmark procedure's user ID from the verified
+server session; do not accept it from an untrusted browser parameter. The
+bookmark procedure checks collection ownership and locks the collection row
+until the caller commits or rolls back.

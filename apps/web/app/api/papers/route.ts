@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2/promise";
-import { getSession } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/authorization";
 import { getDbPool } from "@/lib/db";
 import { embedText, getEmbeddingConfig } from "@/lib/embeddings";
+import { consumeSemanticSearch } from "@/lib/semantic-quota";
 import { getPaperVectorCollection, searchPaperVectors } from "@/lib/vector-db";
 
 export const runtime = "nodejs";
@@ -26,11 +27,13 @@ export async function GET(request: Request) {
   const terms = query.split(/\s+/).filter(Boolean).slice(0, 8);
 
   if (mode === "semantic") {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Sign in to use semantic search." }, { status: 401 });
     if (!query) return NextResponse.json({ papers: [] });
     try {
+      const user = await getCurrentUser();
+      if (!user) return NextResponse.json({ error: "Sign in to use semantic search." }, { status: 401 });
       const { model } = getEmbeddingConfig();
+      const withinQuota = await consumeSemanticSearch(user.id);
+      if (!withinQuota) return NextResponse.json({ error: "Daily semantic-search limit reached. Try again tomorrow." }, { status: 429 });
       const vector = await embedText(query);
       const collection = await getPaperVectorCollection();
       const matches = await searchPaperVectors(collection, vector, {
@@ -72,9 +75,10 @@ export async function GET(request: Request) {
       });
       return NextResponse.json({ papers, mode: "semantic", model });
     } catch (error) {
-      console.error("Semantic paper search failed:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Semantic paper search failed:", message);
       return NextResponse.json({
-        error: "Semantic search is not ready. Check OPENAI_API_KEY, MONGODB_URI, and the Atlas vector index setup.",
+        error: "Semantic search is not ready. Check that Ollama is running with the configured model and that the Atlas vector index is active.",
       }, { status: 503 });
     }
   }

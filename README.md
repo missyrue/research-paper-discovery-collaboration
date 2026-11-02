@@ -14,29 +14,28 @@ Atlas is a DBMS project for discovering academic papers with MySQL keyword searc
 
 Researchers often search across large collections of papers using exact keywords. A paper that discusses the same idea with different terminology can be difficult to find. Paper discovery, bookmarking, reading-list organization, and research discussion are also commonly spread across separate tools.
 
-The current app searches and filters a seeded MySQL paper library, supports researcher accounts and admin-controlled paper management, and includes a semantic retrieval path backed by Atlas and OpenAI embeddings. Saved-paper persistence, collections, and research collaboration remain future work.
+The current app searches and filters a seeded MySQL paper library, supports researcher accounts and admin-controlled paper management, and includes a semantic retrieval path backed by Atlas and local Ollama embeddings. Saved-paper persistence, collections, and research collaboration remain future work.
 
-## Proposed Features
+## Implemented and Planned Features
 
-- Search and filter papers by keywords and metadata.
-- Discover papers with related meaning using vector similarity search.
-- View paper details, abstracts, publication information, and authors.
-- Bookmark papers and organize them into personal collections.
-- Record user interests for relevant discovery.
-- Create research groups and manage group membership.
-- Discuss papers with other researchers.
-- Apply role-based access for researchers and administrators.
+| Feature | Status |
+|---|---|
+| Keyword search and topic filters | Implemented with MySQL |
+| Semantic paper search | Implemented with Ollama embeddings and MongoDB Atlas Vector Search |
+| Registration/sign-in and Researcher/Admin roles | Implemented in the application; see authorization setup |
+| Admin paper management and vector indexing | Implemented in protected routes and `/admin` |
+| Bookmarks, collections, interests, groups, and discussions | Schema included; persistent user workflows are future work |
 
-## Proposed Technology Stack
+## Technology Stack
 
 | Layer | Technology | Purpose |
 |---|---|---|
 | Web application | Next.js App Router, React, TypeScript | User interface and application routes |
 | Relational database | MySQL 8 | Users, roles, papers, authors, bookmarks, collections, groups, and discussions |
 | Vector database | MongoDB Atlas Vector Search | Store paper embeddings and retrieve semantically similar papers |
-| Embeddings | OpenAI `text-embedding-3-small` | Convert paper title/abstract and queries to 1536-dimensional vectors |
+| Embeddings | Local Ollama `nomic-embed-text` | Convert paper title/abstract and queries to 768-dimensional vectors without a paid API key |
 
-The Atlas and embedding credentials are per-developer secrets in ignored `apps/web/.env.local`; they are not checked into this repository.
+The Atlas connection string and MySQL credentials are per-developer secrets in ignored `apps/web/.env.local`; they are not checked into this repository. Ollama runs locally at `http://127.0.0.1:11434`.
 
 ## Repository Contents
 
@@ -45,19 +44,18 @@ The Atlas and embedding credentials are per-developer secrets in ignored `apps/w
 ├── apps/
 │   └── web/                         # Next.js discovery app and MySQL API
 ├── database/
-│   ├── mysql/                        # MySQL schema, seed data, advanced concepts, and local setup
+│   ├── mysql/                        # MySQL schema, seed data, and local setup
 │   ├── sql/schema.sql                # SQL relational schema
-│   ├── sql/queries.sql               # Parameterized application query examples
+│   ├── sql/queries.sql               # Parameterized SQL query statements
 │   └── vector/                        # Atlas Vector Search setup and demo
 ├── docs/
 │   └── DBMS_PROJECT_REPORT.md        # DBMS mini project report
 └── screenshots/
     ├── atlas-discovery-mysql.png     # App search page
-    ├── atlas-paper-results.png      # MySQL result cards
-    └── atlas-login-prototype.png    # Earlier sign-in UI capture
+    └── atlas-paper-results.png      # MySQL result cards
 ```
 
-The report uses the supplied captures of the running discovery interface. The sign-in capture is from the earlier UI prototype and is not evidence of a successful login.
+The checked-in screenshots show the running MySQL keyword-search interface. They do not document sign-in or semantic search.
 
 ## Database Design
 
@@ -72,15 +70,15 @@ The local app uses MySQL 8. Apply [`database/mysql/schema.sql`](database/mysql/s
 
 Primary keys, foreign keys, uniqueness constraints, check constraints, and indexes help maintain data integrity and support common lookups. MySQL commands are also included in `database/sql/` for the report.
 
-The database layer also demonstrates five advanced concepts: a FULLTEXT index used by the app's keyword search, stored procedures for ranked search and safe bookmark writes, update/delete audit triggers, a paper-engagement view, and InnoDB transactions with row locking. See [`database/mysql/ADVANCED_CONCEPTS.md`](database/mysql/ADVANCED_CONCEPTS.md) for the runnable demo.
+The database layer also includes MySQL 8 evaluation examples for JOIN, GROUP BY with aggregates, UPDATE, DELETE, correlated and nested subqueries, audit triggers, and other advanced concepts. The write examples run in transactions and roll back. See [`database/mysql/ADVANCED_CONCEPTS.md`](database/mysql/ADVANCED_CONCEPTS.md).
 
-The app's semantic mode embeds a query, retrieves ranked paper IDs through Atlas `$vectorSearch`, and resolves paper details from MySQL. Admins can sync embeddings from the MySQL library using `/admin`. Atlas must have the configured vector index, and `OPENAI_API_KEY` and `MONGODB_URI` must be configured before this mode will run. MySQL remains the source of truth for paper records.
+The app's semantic mode embeds a query locally with Ollama, retrieves ranked paper IDs through Atlas `$vectorSearch`, and resolves paper details from MySQL. Admins can sync embeddings from the MySQL library using `/admin`. Atlas must have the configured 768-dimension vector index, Ollama must be running with `nomic-embed-text`, and `MONGODB_URI` must be configured before this mode will run. No OpenAI API key is required. MySQL remains the source of truth for paper records.
 
 See [`database/vector/README.md`](database/vector/README.md) for configuration, Atlas index creation, embedding ingestion, and semantic search steps.
 
 ## Next.js Application
 
-The Next.js App Router interface is in [`apps/web`](apps/web/README.md). Paper search and topic filtering use a parameterized MySQL API route backed by the FULLTEXT index and seeded sample records. Registration assigns the Researcher role; Admin-only APIs and the `/admin` page manage paper records. Passwords use scrypt hashes and sessions use signed HTTP-only cookies. Saving papers remains local to the browser.
+The Next.js App Router interface is in [`apps/web`](apps/web/README.md). Paper search and topic filtering use a parameterized MySQL API route and seeded sample records. Registration assigns the Researcher role; Admin-only APIs and the `/admin` page manage paper records. Passwords use scrypt hashes and sessions use signed HTTP-only cookies. Saving papers remains local to the browser.
 
 ```bash
 cd apps/web
@@ -106,9 +104,8 @@ See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the require
 
 1. Verify registration and sign-in against the local MySQL instance.
 2. Persist bookmarks and collections for signed-in users.
-3. Configure Atlas and OpenAI credentials and verify vector ingestion/search on the target environment.
-4. Persist bookmarks and collections for signed-in users.
-5. Build research-group, collaboration, and discussion workflows.
+3. Build research-group, collaboration, and discussion workflows.
+4. Capture the live semantic-search and role authorization flows for the final report.
 
 ## Resume Project Name
 
@@ -122,7 +119,7 @@ The work is divided into two comparable database-focused tracks so each student 
 
 | Student | Owned work | Files / deliverables |
 |---|---|---|
-| Aaruni Choudhary (PES2UG24CS013) | Relational data model: MySQL tables, keys, constraints, indexes, and application query examples | `database/mysql/`, `database/sql/schema.sql`, `database/sql/queries.sql` |
-| Anchita Chhibba (PES2UG24CS060) | Semantic retrieval: vector document model, Atlas index configuration, embedding ingestion/search examples, and semantic-search evaluation/demo | `database/vector/`, semantic retrieval documentation and demo evidence |
+| Aaruni Choudhary (PES2UG24CS013) | Relational data model: MySQL tables, keys, constraints, indexes, and application query statements | `database/mysql/`, `database/sql/schema.sql`, `database/sql/queries.sql` |
+| Anchita Chhibba (PES2UG24CS060) | Semantic retrieval implementation: vector document model, Atlas index, embedding ingestion, search, and verified retrieval | `database/vector/`, semantic retrieval code and demo evidence |
 
 Each student should commit their own work under their GitHub identity after reviewing it. The relational and vector tracks can be developed independently and integrated through the shared `paper_id` identifier.

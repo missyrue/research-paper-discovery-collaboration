@@ -4,6 +4,13 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+async function readApiResponse<T>(response: Response): Promise<T> {
+  const body = await response.text();
+  if (!body.trim()) throw new Error(`The server returned an empty response (HTTP ${response.status}). Check the Next.js terminal.`);
+  try { return JSON.parse(body) as T; }
+  catch { throw new Error(`The server returned a non-JSON response (HTTP ${response.status}). Check the Next.js terminal.`); }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -23,7 +30,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode, name, email, password }),
       });
-      const result = await response.json();
+      const result = await readApiResponse<{ error?: string; user?: { role?: string } }>(response);
       if (!response.ok) throw new Error(result.error ?? "Could not authenticate.");
       router.push(result.user?.role === "Admin" ? "/admin" : "/");
       router.refresh();

@@ -13,6 +13,17 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES roles(role_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS semantic_search_usage (
+  user_id BIGINT UNSIGNED NOT NULL,
+  usage_date DATE NOT NULL,
+  request_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, usage_date),
+  INDEX idx_semantic_usage_date (usage_date),
+  CONSTRAINT chk_semantic_search_daily_limit CHECK (request_count <= 30),
+  CONSTRAINT fk_semantic_usage_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS papers (
   paper_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   title TEXT NOT NULL,
