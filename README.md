@@ -43,7 +43,7 @@ These are proposed implementation choices for the project. They are not all conf
 ```text
 .
 ├── apps/
-│   └── web/                         # Planned location for the Next.js app
+│   └── web/                         # Next.js discovery interface prototype
 ├── database/
 │   ├── sql/schema.sql                # PostgreSQL tables, constraints, indexes, sample queries
 │   ├── sql/queries.sql               # Parameterized application query examples
@@ -74,17 +74,17 @@ The MongoDB example in [`database/vector/atlas-vector-search.js`](database/vecto
 
 See [`database/vector/README.md`](database/vector/README.md) for the vector index definition, ingestion/search example, and a small semantic retrieval demo plan. The example deliberately accepts embeddings from an external model adapter rather than choosing a provider or embedding dimensions for the project.
 
-## Next.js Application (Planned)
+## Next.js Application
 
-The intended application structure is described in the report. To initialize the web application when development begins:
+The initial Next.js App Router prototype is in [`apps/web`](apps/web/README.md). It includes a responsive paper discovery screen with sample records, topic filters, save interactions, and a sign-in screen. Search results and account actions are currently local demo UI; connect PostgreSQL and an authentication service before using real accounts or papers.
 
 ```bash
 cd apps/web
-npx create-next-app@latest . --typescript --app
+npm install
 npm run dev
 ```
 
-The `apps/web` directory is currently only a planned location. The commands above will create and run a Next.js application after dependencies are installed; they do not run the current scaffold as-is.
+The app uses the Next.js App Router with TypeScript. Follow the official [Next.js authentication guide](https://nextjs.org/docs/app/guides/authentication) when wiring the sign-in screen to the database and a secure session implementation.
 
 ## Project Report
 
