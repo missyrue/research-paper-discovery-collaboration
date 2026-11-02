@@ -21,7 +21,8 @@ npm run dev
 
 The setup script asks for the MySQL administrator password, creates the
 `atlas_research` schema and a restricted `atlas_app` account, loads sample
-papers, and writes app credentials to the ignored `.env.local` file. Open
+papers and the advanced SQL objects (audit triggers, procedures, and view),
+then writes app credentials to the ignored `.env.local` file. Open
 `http://localhost:3000`; check `/api/health` to see whether the app can connect.
 To enable semantic search, install Ollama, run `ollama pull nomic-embed-text`, then configure Atlas and local embedding settings in
 `.env.local` as described in [`../../database/vector/README.md`](../../database/vector/README.md).

@@ -86,9 +86,8 @@ export async function GET(request: Request) {
   const where: string[] = [];
   const values: (string | number)[] = [];
   if (terms.length) {
-    const termConditions = terms.map(() => "(p.title LIKE ? OR p.abstract LIKE ?)");
-    where.push(`(${termConditions.join(" OR ")})`);
-    for (const term of terms) values.push(`%${term}%`, `%${term}%`);
+    where.push("MATCH(p.title, p.abstract) AGAINST (? IN NATURAL LANGUAGE MODE)");
+    values.push(query);
   }
   if (topic) {
     where.push("EXISTS (SELECT 1 FROM paper_topics filter_topic WHERE filter_topic.paper_id = p.paper_id AND filter_topic.topic = ?)");
@@ -99,9 +98,8 @@ export async function GET(request: Request) {
   if (sort === "newest") {
     orderBy = "p.publication_year DESC, p.paper_id DESC";
   } else if (terms.length) {
-    const rankExpression = terms.map(() => "(CASE WHEN p.title LIKE ? THEN 2 ELSE 0 END + CASE WHEN p.abstract LIKE ? THEN 1 ELSE 0 END)").join(" + ");
-    orderBy = `(${rankExpression}) DESC, p.paper_id ASC`;
-    for (const term of terms) values.push(`%${term}%`, `%${term}%`);
+    orderBy = "MATCH(p.title, p.abstract) AGAINST (? IN NATURAL LANGUAGE MODE) DESC, p.paper_id ASC";
+    values.push(query);
   } else {
     orderBy = "p.paper_id ASC";
   }
@@ -129,7 +127,7 @@ export async function GET(request: Request) {
       abstract: paper.abstract,
       tags: paper.topics ? paper.topics.split(",") : [],
       year: paper.publication_year,
-      match: "MySQL keyword result",
+      match: "MySQL full-text result",
       color: ["lavender", "peach", "mint"][index % 3],
     }));
     return NextResponse.json({ papers });

@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS papers (
   paper_url TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT chk_papers_year CHECK (publication_year IS NULL OR publication_year BETWEEN 1000 AND 2200),
-  INDEX idx_papers_year (publication_year)
+  INDEX idx_papers_year (publication_year),
+  FULLTEXT INDEX ft_papers_title_abstract (title, abstract)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS authors (

@@ -1,12 +1,8 @@
 -- MySQL 8 query statements for the relational database.
 -- Bind each ? value in the application layer; never concatenate user input.
 
--- 1. Search titles and abstracts. The API expands a phrase into bound terms.
-SELECT p.paper_id, p.title, p.publication_year, p.venue
-FROM papers AS p
-WHERE p.title LIKE ? OR p.abstract LIKE ?
-ORDER BY p.publication_year DESC, p.paper_id DESC
-LIMIT 20;
+-- 1. Ranked full-text search using the FULLTEXT index and stored procedure.
+CALL sp_search_papers(?, NULL, NULL, 20);
 
 -- 2. Fetch a paper and its authors in author order.
 SELECT p.paper_id, p.title, p.abstract, p.doi, p.publication_year,
@@ -27,14 +23,10 @@ LEFT JOIN collections AS c
 WHERE b.user_id = ?
 ORDER BY b.saved_at DESC;
 
--- 4. Save a bookmark idempotently. Verify collection ownership in the same
--- application transaction before writing; use NULL for the default library.
+-- 4. Save a bookmark idempotently. The caller's transaction holds the
+-- collection ownership row lock through commit; use NULL for the default library.
 START TRANSACTION;
-INSERT INTO bookmarks (user_id, paper_id, collection_id)
-VALUES (?, ?, ?)
-ON DUPLICATE KEY UPDATE
-  collection_id = VALUES(collection_id),
-  saved_at = CURRENT_TIMESTAMP;
+CALL sp_save_paper_bookmark(?, ?, ?);
 COMMIT;
 
 -- 5. Show group members.

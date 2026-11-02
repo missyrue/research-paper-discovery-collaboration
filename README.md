@@ -70,6 +70,8 @@ The local app uses MySQL 8. Apply [`database/mysql/schema.sql`](database/mysql/s
 
 Primary keys, foreign keys, uniqueness constraints, check constraints, and indexes help maintain data integrity and support common lookups. MySQL commands are also included in `database/sql/` for the report.
 
+The database layer also includes MySQL 8 evaluation examples for JOIN, GROUP BY with aggregates, UPDATE, DELETE, correlated and nested subqueries, audit triggers, and other advanced concepts. The write examples run in transactions and roll back. See [`database/mysql/ADVANCED_CONCEPTS.md`](database/mysql/ADVANCED_CONCEPTS.md).
+
 The app's semantic mode embeds a query locally with Ollama, retrieves ranked paper IDs through Atlas `$vectorSearch`, and resolves paper details from MySQL. Admins can sync embeddings from the MySQL library using `/admin`. Atlas must have the configured 768-dimension vector index, Ollama must be running with `nomic-embed-text`, and `MONGODB_URI` must be configured before this mode will run. No OpenAI API key is required. MySQL remains the source of truth for paper records.
 
 See [`database/vector/README.md`](database/vector/README.md) for configuration, Atlas index creation, embedding ingestion, and semantic search steps.
@@ -102,9 +104,8 @@ See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the require
 
 1. Verify registration and sign-in against the local MySQL instance.
 2. Persist bookmarks and collections for signed-in users.
-3. Persist bookmarks and collections for signed-in users.
-4. Build research-group, collaboration, and discussion workflows.
-5. Capture the live semantic-search and role authorization flows for the final report.
+3. Build research-group, collaboration, and discussion workflows.
+4. Capture the live semantic-search and role authorization flows for the final report.
 
 ## Resume Project Name
 

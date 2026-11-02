@@ -8,6 +8,8 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $mysqlExe = 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe'
 $schemaPath = Join-Path $PSScriptRoot 'schema.sql'
 $seedPath = Join-Path $PSScriptRoot 'seed.sql'
+$advancedSqlPath = Join-Path $PSScriptRoot 'advanced_concepts.sql'
+$advancedDemoSeedPath = Join-Path $PSScriptRoot 'advanced_concepts_demo_seed.sql'
 $envPath = Join-Path $repoRoot 'apps\web\.env.local'
 $preservedVectorConfig = @()
 if (Test-Path -LiteralPath $envPath) {
@@ -21,7 +23,7 @@ if (Test-Path -LiteralPath $envPath) {
 $tempSqlPath = Join-Path $env:TEMP ("atlas-mysql-setup-{0}.sql" -f [guid]::NewGuid())
 
 if (-not (Test-Path -LiteralPath $mysqlExe)) { throw "MySQL client not found at $mysqlExe" }
-if (-not (Test-Path -LiteralPath $schemaPath) -or -not (Test-Path -LiteralPath $seedPath)) { throw 'MySQL schema or seed file is missing.' }
+if (-not (Test-Path -LiteralPath $schemaPath) -or -not (Test-Path -LiteralPath $seedPath) -or -not (Test-Path -LiteralPath $advancedSqlPath) -or -not (Test-Path -LiteralPath $advancedDemoSeedPath)) { throw 'A MySQL schema, seed, or advanced concepts file is missing.' }
 
 $randomBytes = New-Object byte[] 24
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -49,6 +51,10 @@ USE atlas_research;
 $sql += [System.IO.File]::ReadAllText($schemaPath) + "`r`n"
 $sql += "INSERT IGNORE INTO roles (role_name) VALUES ('Researcher'), ('Admin');`r`n"
 $sql += [System.IO.File]::ReadAllText($seedPath) + "`r`n"
+$sql += [System.IO.File]::ReadAllText($advancedSqlPath) + "`r`n"
+$sql += [System.IO.File]::ReadAllText($advancedDemoSeedPath) + "`r`n"
+$sql += "GRANT EXECUTE ON PROCEDURE atlas_research.sp_search_papers TO 'atlas_app'@'127.0.0.1';`r`n"
+$sql += "GRANT EXECUTE ON PROCEDURE atlas_research.sp_save_paper_bookmark TO 'atlas_app'@'127.0.0.1';`r`n"
 
 try {
   [System.IO.File]::WriteAllText($tempSqlPath, $sql, [System.Text.UTF8Encoding]::new($false))
