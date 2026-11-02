@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 type Paper = {
   id: string;
@@ -15,6 +15,7 @@ type Paper = {
   color: string;
 };
 type CurrentUser = { name: string; email: string; role: "Admin" | "Researcher" };
+type PaperCollection = { id: string; name: string; paperIds: string[] };
 
 async function readApiResponse<T>(response: Response): Promise<T> {
   const body = await response.text();
@@ -26,16 +27,68 @@ async function readApiResponse<T>(response: Response): Promise<T> {
 const topics = ["All papers", "Machine learning", "Biology", "Computer vision", "Natural language"];
 
 export default function Home() {
-  const [query, setQuery] = useState("graph models for molecular discovery");
-  const [submittedQuery, setSubmittedQuery] = useState("graph models for molecular discovery");
+  const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [activeTopic, setActiveTopic] = useState("All papers");
-  const [saved, setSaved] = useState<string[]>([]);
+  const [saved, setSaved] = useState<Paper[]>([]);
+  const [savedLoaded, setSavedLoaded] = useState(false);
+  const [collections, setCollections] = useState<PaperCollection[]>([]);
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [collectionSelections, setCollectionSelections] = useState<Record<string, string>>({});
   const [sort, setSort] = useState("Best match");
   const [searchMode, setSearchMode] = useState<"keyword" | "semantic">("keyword");
   const [results, setResults] = useState<Paper[]>([]);
+  const [expandedPaperIds, setExpandedPaperIds] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("atlas:saved-papers");
+      if (stored) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed)) setSaved(parsed as Paper[]);
+      }
+    } catch {
+      // Keep the page usable if browser storage is unavailable or malformed.
+    } finally {
+      setSavedLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!savedLoaded) return;
+    try {
+      window.localStorage.setItem("atlas:saved-papers", JSON.stringify(saved));
+    } catch {
+      // Saving still works for this page session if browser storage is full or disabled.
+    }
+  }, [saved, savedLoaded]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("atlas:collections");
+      if (stored) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed)) setCollections(parsed as PaperCollection[]);
+      }
+    } catch {
+      // Keep the page usable if browser storage is unavailable or malformed.
+    } finally {
+      setCollectionsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!collectionsLoaded) return;
+    try {
+      window.localStorage.setItem("atlas:collections", JSON.stringify(collections));
+    } catch {
+      // Collections remain usable for this page session if browser storage is unavailable.
+    }
+  }, [collections, collectionsLoaded]);
 
   useEffect(() => {
     let active = true;
@@ -75,8 +128,49 @@ export default function Home() {
     return () => { active = false; };
   }, [submittedQuery, activeTopic, sort, searchMode]);
 
-  function toggleSaved(id: string) {
-    setSaved((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  function toggleDescription(paperId: string) {
+    setExpandedPaperIds((current) => {
+      const next = new Set(current);
+      if (next.has(paperId)) next.delete(paperId);
+      else next.add(paperId);
+      return next;
+    });
+  }
+
+  function toggleSaved(paper: Paper) {
+    const removing = saved.some((item) => item.id === paper.id);
+    setSaved((current) => current.some((item) => item.id === paper.id)
+      ? current.filter((item) => item.id !== paper.id)
+      : [...current, paper]);
+    if (removing) {
+      setCollections((current) => current.map((collection) => ({
+        ...collection,
+        paperIds: collection.paperIds.filter((id) => id !== paper.id),
+      })));
+    }
+  }
+
+  function createCollection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newCollectionName.trim();
+    if (!name || collections.some((collection) => collection.name.toLowerCase() === name.toLowerCase())) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setCollections((current) => [...current, { id, name, paperIds: [] }]);
+    setNewCollectionName("");
+  }
+
+  function addPaperToCollection(collectionId: string) {
+    const paperId = collectionSelections[collectionId];
+    if (!paperId) return;
+    setCollections((current) => current.map((collection) => collection.id === collectionId && !collection.paperIds.includes(paperId)
+      ? { ...collection, paperIds: [...collection.paperIds, paperId] }
+      : collection));
+  }
+
+  function removePaperFromCollection(collectionId: string, paperId: string) {
+    setCollections((current) => current.map((collection) => collection.id === collectionId
+      ? { ...collection, paperIds: collection.paperIds.filter((id) => id !== paperId) }
+      : collection));
   }
 
   async function signOut() {
@@ -87,12 +181,12 @@ export default function Home() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <Link className="brand" href="/" aria-label="Atlas home"><span className="brand-mark">a</span><span>atlas<span className="brand-dot">.</span></span></Link>
+        <Link className="brand" href="/" aria-label="Paperloom home"><span className="brand-mark">p</span><span>paperloom<span className="brand-dot">.</span></span></Link>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Main navigation">
           <a className="nav-item active" href="#discover"><span className="nav-icon">⌕</span> Discover</a>
           <a className="nav-item" href="#saved"><span className="nav-icon">♡</span> Saved papers <span className="nav-count">{saved.length || ""}</span></a>
-          <a className="nav-item" href="#collections"><span className="nav-icon">▤</span> Collections</a>
+          <a className="nav-item" href="#collections"><span className="nav-icon">▤</span> Collections <span className="nav-count">{collections.length || ""}</span></a>
           <a className="nav-item" href="#groups"><span className="nav-icon">◉</span> Research groups</a>
         </nav>
         <div className="sidebar-label topics-label">YOUR TOPICS <button className="plus-button" aria-label="Add topic">+</button></div>
@@ -131,11 +225,42 @@ export default function Home() {
           <div className="paper-list">{loading ? <p className="prototype-note">Loading papers from MySQL…</p> : error ? <p className="prototype-note">{error}</p> : results.length === 0 ? <p className="prototype-note">No papers matched. Try a shorter search or another topic.</p> : results.map((paper, index) => <article className="paper-card" key={paper.id}>
             <div className="paper-number">{paper.id}</div>
             <div className="paper-body"><div className="paper-meta"><span className={`paper-art ${paper.color}`}><span>{index === 0 ? "∿" : index === 1 ? "✳" : "◌"}</span></span><span>{paper.venue}</span><span className="match-label"><i />{paper.match}</span></div>
-              <h3>{paper.title}</h3><p className="authors">{paper.authors}</p><p className="abstract">{paper.abstract}</p><div className="paper-footer"><div className="tag-list">{paper.tags.map((tag) => <span className="paper-tag" key={tag}>{tag}</span>)}</div><button className={`save-button ${saved.includes(paper.id) ? "saved" : ""}`} onClick={() => toggleSaved(paper.id)} aria-label={saved.includes(paper.id) ? "Remove saved paper" : "Save paper"}><span>{saved.includes(paper.id) ? "♥" : "♡"}</span> {saved.includes(paper.id) ? "Saved" : "Save paper"}</button></div>
+              <h3>{paper.title}</h3><p className="authors">{paper.authors}</p><p className="abstract-preview">{paper.abstract.split(/\s+/).slice(0, 24).join(" ")}{paper.abstract.split(/\s+/).length > 24 ? "…" : ""}</p><button type="button" className="description-toggle" aria-expanded={expandedPaperIds.has(paper.id)} onClick={() => toggleDescription(paper.id)}>{expandedPaperIds.has(paper.id) ? "Hide full description" : "Read full description"}</button>{expandedPaperIds.has(paper.id) && <p className="abstract">{paper.abstract}</p>}<div className="paper-footer"><div className="tag-list">{paper.tags.map((tag) => <span className="paper-tag" key={tag}>{tag}</span>)}</div><button className={`save-button ${saved.some((item) => item.id === paper.id) ? "saved" : ""}`} onClick={() => toggleSaved(paper)} aria-label={saved.some((item) => item.id === paper.id) ? "Remove saved paper" : "Save paper"}><span>{saved.some((item) => item.id === paper.id) ? "♥" : "♡"}</span> {saved.some((item) => item.id === paper.id) ? "Saved" : "Save paper"}</button></div>
             </div>
           </article>)}</div>
-          <div className="prototype-note"><span>✳</span><p><strong>{searchMode === "semantic" ? "MongoDB Atlas Vector Search." : "MySQL paper library."}</strong> {searchMode === "semantic" ? "Vector similarity ranks papers; paper details are loaded from MySQL." : "Keyword matching and topic filters query the local relational database."} Saved-paper persistence and collaboration workflows remain future work.</p></div>
-          <footer className="page-footer"><span>ATLAS <i>·</i> RESEARCH, CONNECTED</span><span>Made for curious minds <span className="footer-spark">✳</span></span></footer>
+          <section className="saved-section" id="saved" aria-labelledby="saved-heading">
+            <div className="results-heading"><div><div className="section-kicker">YOUR LIBRARY</div><h2 id="saved-heading">Saved papers <span className="result-count">{saved.length.toString().padStart(2, "0")}</span></h2></div></div>
+            {saved.length === 0 ? <p className="prototype-note">No saved papers yet. Choose “Save paper” on any result to add it here.</p> : <div className="paper-list">{saved.map((paper) => <article className="paper-card" key={paper.id}>
+              <div className="paper-number">{paper.id}</div>
+              <div className="paper-body"><div className="paper-meta"><span className={`paper-art ${paper.color}`}><span>♡</span></span><span>{paper.venue}</span><span className="match-label"><i />Saved in this browser</span></div>
+                <h3>{paper.title}</h3><p className="authors">{paper.authors}</p><p className="abstract-preview">{paper.abstract.split(/\s+/).slice(0, 24).join(" ")}{paper.abstract.split(/\s+/).length > 24 ? "…" : ""}</p><button type="button" className="description-toggle" aria-expanded={expandedPaperIds.has(paper.id)} onClick={() => toggleDescription(paper.id)}>{expandedPaperIds.has(paper.id) ? "Hide full description" : "Read full description"}</button>{expandedPaperIds.has(paper.id) && <p className="abstract">{paper.abstract}</p>}<div className="paper-footer"><div className="tag-list">{paper.tags.map((tag) => <span className="paper-tag" key={tag}>{tag}</span>)}</div><button className="save-button saved" onClick={() => toggleSaved(paper)} aria-label="Remove saved paper"><span>♥</span> Remove</button></div>
+              </div>
+            </article>)}</div>}
+          </section>
+          <section className="collections-section" id="collections" aria-labelledby="collections-heading">
+            <div className="results-heading"><div><div className="section-kicker">ORGANIZE YOUR READING</div><h2 id="collections-heading">Collections <span className="result-count">{collections.length.toString().padStart(2, "0")}</span></h2></div></div>
+            <form className="collection-create" onSubmit={createCollection}>
+              <input aria-label="New collection name" value={newCollectionName} onChange={(event) => setNewCollectionName(event.target.value)} maxLength={80} placeholder="Name a collection, e.g. Graph learning" />
+              <button className="search-button" type="submit" disabled={!newCollectionName.trim()}>Create collection</button>
+            </form>
+            {collections.length === 0 ? <p className="prototype-note">No collections yet. Create one above to group saved papers by topic or project.</p> : <div className="collection-list">{collections.map((collection) => {
+              const collectionPapers = collection.paperIds.map((id) => saved.find((paper) => paper.id === id)).filter((paper): paper is Paper => Boolean(paper));
+              const selectedPaper = collectionSelections[collection.id] ?? "";
+              return <article className="collection-card" key={collection.id}>
+                <div className="collection-heading"><div><div className="section-kicker">{collectionPapers.length} {collectionPapers.length === 1 ? "PAPER" : "PAPERS"}</div><h3>{collection.name}</h3></div><button className="save-button" type="button" onClick={() => setCollections((current) => current.filter((item) => item.id !== collection.id))}>Delete collection</button></div>
+                {saved.length === 0 ? <p className="collection-empty">Save papers from Discover first, then add them to this collection.</p> : <form className="collection-add" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); addPaperToCollection(collection.id); }}>
+                  <select aria-label={`Choose a saved paper for ${collection.name}`} value={selectedPaper} onChange={(event) => setCollectionSelections((current) => ({ ...current, [collection.id]: event.target.value }))}>
+                    <option value="">Choose a saved paper</option>
+                    {saved.map((paper) => <option key={paper.id} value={paper.id} disabled={collection.paperIds.includes(paper.id)}>{paper.title}{collection.paperIds.includes(paper.id) ? " (added)" : ""}</option>)}
+                  </select>
+                  <button className="filter-chip selected" type="submit" disabled={!selectedPaper || collection.paperIds.includes(selectedPaper)}>Add paper</button>
+                </form>}
+                {collectionPapers.length > 0 && <div className="collection-paper-list">{collectionPapers.map((paper) => <div className="collection-paper" key={paper.id}><div><strong>{paper.title}</strong><span>{paper.authors}</span></div><button className="save-button" type="button" onClick={() => removePaperFromCollection(collection.id, paper.id)}>Remove</button></div>)}</div>}
+              </article>;
+            })}</div>}
+          </section>
+          <div className="prototype-note"><span>✳</span><p><strong>{searchMode === "semantic" ? "MongoDB Atlas Vector Search." : "MySQL paper library."}</strong> {searchMode === "semantic" ? "Vector similarity ranks papers; paper details are loaded from MySQL." : "Keyword matching and topic filters query the local relational database."} Saved papers and collections are stored in this browser.</p></div>
+          <footer className="page-footer"><span>PAPERLOOM <i>·</i> RESEARCH, CONNECTED</span><span>Made for curious minds <span className="footer-spark">✳</span></span></footer>
         </div>
       </section>
     </main>

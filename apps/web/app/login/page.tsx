@@ -43,7 +43,7 @@ export default function LoginPage() {
 
   return (
     <main className="auth-shell">
-      <Link className="brand auth-brand" href="/"><span className="brand-mark">a</span><span>atlas<span className="brand-dot">.</span></span></Link>
+      <Link className="brand auth-brand" href="/" aria-label="Paperloom home"><span className="brand-mark">p</span><span>paperloom<span className="brand-dot">.</span></span></Link>
       <section className="auth-card">
         <div className="eyebrow"><span className="eyebrow-line" /> YOUR RESEARCH, IN GOOD COMPANY</div>
         <h1>{mode === "login" ? <>Welcome<br /><em>back.</em></> : <>Join the<br /><em>conversation.</em></>}</h1>
@@ -57,7 +57,7 @@ export default function LoginPage() {
           {error && <p className="auth-notice" role="alert">{error}</p>}
           <button type="submit" className="auth-submit" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"} <span>↗</span></button>
         </form>
-        <p className="auth-switch">{mode === "login" ? "New to Atlas? " : "Already have an account? "}<button type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "Create an account" : "Sign in"}</button></p>
+        <p className="auth-switch">{mode === "login" ? "New to Paperloom? " : "Already have an account? "}<button type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "Create an account" : "Sign in"}</button></p>
       </section>
       <p className="auth-caption">A quieter place to follow a question.</p>
     </main>
