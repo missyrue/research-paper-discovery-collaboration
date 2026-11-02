@@ -46,7 +46,8 @@ These are proposed implementation choices for the project. They are not all conf
 │   └── web/                         # Planned location for the Next.js app
 ├── database/
 │   ├── sql/schema.sql                # PostgreSQL tables, constraints, indexes, sample queries
-│   └── vector/atlas-vector-search.js # MongoDB Atlas Vector Search example
+│   ├── sql/queries.sql               # Parameterized application query examples
+│   └── vector/                        # Atlas Vector Search setup and demo
 ├── docs/
 │   └── DBMS_PROJECT_REPORT.md        # DBMS mini project report
 └── screenshots/
@@ -70,6 +71,8 @@ The PostgreSQL schema in [`database/sql/schema.sql`](database/sql/schema.sql) de
 Primary keys, foreign keys, uniqueness constraints, check constraints, and indexes help maintain data integrity and support common lookups. Example SQL is included for keyword search and idempotent bookmarking.
 
 The MongoDB example in [`database/vector/atlas-vector-search.js`](database/vector/atlas-vector-search.js) shows a proposed vector document and `$vectorSearch` aggregation. It uses placeholders: real vectors must be generated using a selected embedding model, and the Atlas vector index must be configured with the matching dimensions. PostgreSQL remains the source of truth for paper records; vector search results should be resolved to the corresponding relational records.
+
+See [`database/vector/README.md`](database/vector/README.md) for the vector index definition, ingestion/search example, and a small semantic retrieval demo plan. The example deliberately accepts embeddings from an external model adapter rather than choosing a provider or embedding dimensions for the project.
 
 ## Next.js Application (Planned)
 
