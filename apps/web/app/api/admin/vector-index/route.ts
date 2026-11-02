@@ -84,8 +84,11 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Paper vector indexing failed:", message);
+    const userMessage = process.env.NODE_ENV === "production"
+      ? `Could not index papers. Check that Ollama is running with ${process.env.EMBEDDING_MODEL ?? "nomic-embed-text"} installed, then check MongoDB Atlas connectivity and permissions.`
+      : `Paper indexing failed: ${message}`;
     return NextResponse.json({
-      error: `Could not index papers. Check that Ollama is running with ${process.env.EMBEDDING_MODEL ?? "nomic-embed-text"} installed, then check MONGODB_URI and Atlas permissions.`,
+      error: userMessage,
     }, { status: 503 });
   }
 }
