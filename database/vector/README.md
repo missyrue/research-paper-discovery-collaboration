@@ -1,30 +1,52 @@
-# MongoDB Atlas Vector Search
+# MongoDB Atlas Vector Search with local Ollama embeddings
 
-The Next.js app has a semantic-search path backed by MongoDB Atlas Vector Search. MySQL remains the authoritative source for papers, authors, and topics. The app sends paper title/abstract and search text to the OpenAI Embeddings API using `text-embedding-3-small` (1536 dimensions), stores paper embeddings in Atlas, uses cosine vector search to rank paper IDs, and loads the matching canonical paper rows from MySQL.
+MySQL is the source of truth for users, papers, authors, and topics. The Next.js server uses the local Ollama service to embed paper titles/abstracts and semantic queries with `nomic-embed-text` (768 dimensions). MongoDB Atlas stores those vectors and metadata, then cosine vector search returns ranked MySQL paper IDs. Paper details are loaded from MySQL after retrieval.
 
-## Configure local credentials
+## 1. Install and start Ollama
 
-Add these values to the ignored `apps/web/.env.local` file. Do not commit this file or paste credentials into GitHub/chat.
+Install Ollama for Windows from [ollama.com/download](https://ollama.com/download), then open PowerShell and download the embedding model:
+
+```powershell
+ollama pull nomic-embed-text
+ollama list
+```
+
+Ollama should be running at `http://127.0.0.1:11434`. Check the service and vector length:
+
+```powershell
+$body = @{ model = 'nomic-embed-text'; input = 'search_query: graph models for molecular discovery' } | ConvertTo-Json
+$result = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/embed' -Method Post -ContentType 'application/json' -Body $body
+$result.embeddings[0].Count
+```
+
+The expected length is `768`. Nomic embedding usage prefixes documents with `search_document:` and search text with `search_query:`. The app applies these prefixes automatically. The local model runs without an OpenAI API key or per-request API billing.
+
+## 2. Configure the application
+
+Keep the MySQL credentials and Atlas `MONGODB_URI` in the ignored `apps/web/.env.local`. Use these embedding settings:
 
 ```dotenv
-OPENAI_API_KEY=your-embedding-api-key
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSIONS=1536
-MONGODB_URI=mongodb+srv://...
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMENSIONS=768
 MONGODB_DATABASE=research_papers
 MONGODB_COLLECTION=paper_vectors
 ATLAS_VECTOR_INDEX=paper_embedding_index
 ```
 
-The driver is part of `apps/web/package.json`. Create an Atlas Vector Search index on the `paper_vectors` collection using [`atlas-vector-index.json`](atlas-vector-index.json). Its dimensions and similarity must match the configured embedding model (`1536` and `cosine` for the default model). The index maps the `embedding` vector and the `topics` and `embedding_model` filter fields.
+Do not add `OPENAI_API_KEY`; this implementation does not call OpenAI. Paper text is sent to the Ollama service on the same laptop to generate vectors. The vectors and paper metadata are then stored in MongoDB Atlas.
 
-Search text and paper titles/abstracts are sent to OpenAI to create embeddings. Do not index private or licensed text unless your data-sharing terms allow it. Signed-in accounts have a persistent limit of 30 semantic searches per UTC day; the counter is stored in MySQL.
+## 3. Create or replace the Atlas Vector Search index
 
-## Index the MySQL library
+In Atlas Data Explorer, open `research_papers.paper_vectors` → **Search Indexes**. Create an index named `paper_embedding_index` from [`atlas-vector-index.json`](atlas-vector-index.json). It must use cosine similarity and 768 dimensions.
 
-Start the Next.js app, sign in using an account with the Admin role, and open `http://localhost:3000/admin`. Select **Sync papers to Atlas Vector Search**. The protected API scans the MySQL library in keyset-paginated batches of 50, embeds each changed title plus abstract, and upserts a vector document keyed by the decimal-string MySQL `paper_id`. Re-running it skips documents whose content hash and embedding model are unchanged. The embedding provider may bill for new or changed papers.
+If an old index uses 1536 dimensions, replace it with this 768-dimension definition before syncing. Keep the same index name so the application configuration does not change. Wait until the index status is **Active**.
 
-Each Atlas document stores:
+## 4. Sync MySQL papers into Atlas
+
+Start the local app, sign in with the Admin role, and open `http://localhost:3000/admin`. Select **Sync papers to Atlas Vector Search**. The protected route reads MySQL in batches of 10 papers, creates local embeddings, and upserts documents keyed by the decimal-string MySQL `paper_id`. On the first batch, vectors made by a different embedding model are removed from this dedicated collection; all MySQL papers are then re-embedded with Ollama. Re-running sync skips unchanged records.
+
+Each document contains:
 
 ```json
 {
@@ -34,17 +56,42 @@ Each Atlas document stores:
   "publication_year": 2024,
   "topics": ["Machine learning"],
   "embedding": [0.012, -0.034],
-  "embedding_model": "text-embedding-3-small",
+  "embedding_model": "nomic-embed-text",
+  "content_hash": "sha256-of-source-fields-and-model",
   "updated_at": "2026-11-02T00:00:00.000Z"
 }
 ```
 
-The embedding array above is abbreviated and illustrative, not a real 1536-value vector.
+The embedding array above is abbreviated; real vectors contain 768 values.
 
-## Use semantic search
+## 5. Run semantic search
 
-Sign in as a Researcher or Admin, select **Semantic vectors** on the discovery page, and submit a query. The app embeds the query text, searches the Atlas index by cosine similarity, applies selected topic filters in Atlas, then fetches the matching papers/authors/tags from MySQL while preserving vector ranking. Keyword mode continues to use MySQL `LIKE` matching and does not require Atlas or the embedding API key.
+Sign in as a Researcher or Admin, select **Semantic vectors**, and submit a query. The app creates a local query embedding, runs Atlas `$vectorSearch` with cosine similarity and optional topic filters, then fetches the ranked paper details from MySQL. The MySQL keyword mode remains available and does not require Ollama or MongoDB.
 
-The search route is `apps/web/app/api/papers/route.ts`; embedding requests are handled in `apps/web/lib/embeddings.ts`; MongoDB access and vector aggregation are in `apps/web/lib/vector-db.ts`; the admin-only indexing endpoint is `apps/web/app/api/admin/vector-index/route.ts`.
+Example Atlas aggregation shape:
 
-If semantic search is unavailable, check that the Atlas cluster is reachable from the network, the URI user has read/write access to the selected database, the vector index is active, and all environment variable names match. Never expose API keys in screenshots or logs.
+```javascript
+db.paper_vectors.aggregate([
+  {
+    $vectorSearch: {
+      index: "paper_embedding_index",
+      path: "embedding",
+      queryVector: [/* 768 floats from Ollama */],
+      numCandidates: 200,
+      limit: 10,
+      filter: { embedding_model: "nomic-embed-text" }
+    }
+  },
+  { $project: { _id: 0, paper_id: 1, score: { $meta: "vectorSearchScore" } } }
+]);
+```
+
+Signed-in users are limited to 30 semantic queries per UTC day; MySQL stores the counter. The relevant code is `apps/web/lib/embeddings.ts`, `apps/web/lib/vector-db.ts`, `apps/web/app/api/admin/vector-index/route.ts`, and `apps/web/app/api/papers/route.ts`.
+
+## Troubleshooting
+
+- **Ollama connection refused:** start Ollama and verify `http://127.0.0.1:11434/api/tags` responds.
+- **Model not found:** run `ollama pull nomic-embed-text`.
+- **Vector dimension mismatch:** confirm the model returns 768 values and the Atlas index uses `numDimensions: 768`.
+- **No semantic results:** confirm the index is Active and rerun the Admin sync after changing the embedding model.
+- **MongoDB connection failure:** check the Atlas IP access list, cluster status, `MONGODB_URI`, and database-user permissions.

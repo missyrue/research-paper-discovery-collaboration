@@ -8,7 +8,7 @@ import { getPaperVectorCollection } from "@/lib/vector-db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10;
 
 type SourcePaper = RowDataPacket & {
   paper_id: string | number;
@@ -39,6 +39,11 @@ export async function POST(request: Request) {
     if (papers.length === 0) return NextResponse.json({ indexed: 0, skipped: 0, model, done: true, nextAfterPaperId: null });
 
     const collection = await getPaperVectorCollection();
+    // Rebuild this dedicated collection when changing embedding models/dimensions.
+    // MySQL remains the source of truth, so the vectors can be regenerated safely.
+    if (afterPaperId === "0") {
+      await collection.deleteMany({ embedding_model: { $ne: model } });
+    }
     const candidates = papers.map((paper) => {
       const topics = paper.topics ? paper.topics.split(",") : [];
       const contentHash = createHash("sha256").update(JSON.stringify([
@@ -77,9 +82,10 @@ export async function POST(request: Request) {
       nextAfterPaperId: String(papers[papers.length - 1].paper_id),
     });
   } catch (error) {
-    console.error("Paper vector indexing failed:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Paper vector indexing failed:", message);
     return NextResponse.json({
-      error: "Could not index papers. Check OPENAI_API_KEY, MONGODB_URI, and the database permissions.",
+      error: `Could not index papers. Check that Ollama is running with ${process.env.EMBEDDING_MODEL ?? "nomic-embed-text"} installed, then check MONGODB_URI and Atlas permissions.`,
     }, { status: 503 });
   }
 }

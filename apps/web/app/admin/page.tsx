@@ -7,6 +7,18 @@ import { useRouter } from "next/navigation";
 type Paper = { paper_id: number; title: string; venue: string | null; publication_year: number | null };
 type User = { name: string; email: string; role: "Admin" | "Researcher" };
 
+async function readApiResponse<T>(response: Response): Promise<T> {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new Error(`The server returned an empty response (HTTP ${response.status}). Check the Next.js terminal for the route error, then restart the dev server if needed.`);
+  }
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new Error(`The server returned a non-JSON response (HTTP ${response.status}). Check the Next.js terminal for the route error.`);
+  }
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -18,11 +30,11 @@ export default function AdminPage() {
 
   async function load() {
     const sessionResponse = await fetch("/api/auth");
-    const session = await sessionResponse.json();
+    const session = await readApiResponse<{ user?: User | null }>(sessionResponse);
     setUser(session.user ?? null);
     if (!session.user) { setLoading(false); return; }
     const response = await fetch("/api/admin/papers");
-    const result = await response.json();
+    const result = await readApiResponse<{ papers: Paper[]; error?: string }>(response);
     if (!response.ok) throw new Error(result.error ?? "Could not load admin papers.");
     setPapers(result.papers);
     setLoading(false);
@@ -46,7 +58,7 @@ export default function AdminPage() {
           doi: form.get("doi"), publicationYear: yearValue ? Number(yearValue) : null,
         }),
       });
-      const result = await response.json();
+      const result = await readApiResponse<{ error?: string }>(response);
       if (!response.ok) throw new Error(result.error ?? "Could not add paper.");
       formElement.reset();
       setMessage("Paper added to MySQL. Run Atlas sync to include it in semantic search.");
@@ -62,7 +74,7 @@ export default function AdminPage() {
     const response = await fetch("/api/admin/papers", {
       method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paperId }),
     });
-    const result = await response.json();
+    const result = await readApiResponse<{ error?: string; vectorRemoved?: boolean }>(response);
     if (!response.ok) { setMessage(result.error ?? "Could not delete paper."); return; }
     setPapers((current) => current.filter((paper) => paper.paper_id !== paperId));
     setMessage(result.vectorRemoved ? "Paper deleted from MySQL and Atlas." : "Paper deleted from MySQL, but Atlas cleanup failed. Retry Atlas sync after checking the connection.");
@@ -71,13 +83,17 @@ export default function AdminPage() {
   async function renamePaper(paper: Paper) {
     const title = window.prompt("New paper title", paper.title)?.trim();
     if (!title || title === paper.title) return;
-    const response = await fetch("/api/admin/papers", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paperId: paper.paper_id, title }),
-    });
-    const result = await response.json();
-    if (!response.ok) { setMessage(result.error ?? "Could not update paper."); return; }
-    setPapers((current) => current.map((row) => row.paper_id === paper.paper_id ? { ...row, title } : row));
-    setMessage(result.vectorInvalidated ? "Paper updated in MySQL. Run Atlas sync to recreate its embedding." : "Paper updated in MySQL, but its old Atlas vector could not be cleared. Check Atlas, then sync again.");
+    try {
+      const response = await fetch("/api/admin/papers", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paperId: paper.paper_id, title }),
+      });
+      const result = await readApiResponse<{ error?: string; vectorInvalidated?: boolean }>(response);
+      if (!response.ok) { setMessage(result.error ?? "Could not update paper."); return; }
+      setPapers((current) => current.map((row) => row.paper_id === paper.paper_id ? { ...row, title } : row));
+      setMessage(result.vectorInvalidated ? "Paper updated in MySQL. Run Atlas sync to recreate its embedding." : "Paper updated in MySQL, but its old Atlas vector could not be cleared. Check Atlas, then sync again.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update paper.");
+    }
   }
 
   async function signOut() {
@@ -87,7 +103,7 @@ export default function AdminPage() {
   }
 
   async function indexPapers() {
-    if (!window.confirm("Generate embeddings for all MySQL papers and upsert them to MongoDB Atlas? The embedding provider may charge for usage.")) return;
+    if (!window.confirm("Generate embeddings locally with Ollama for the MySQL papers and upsert them to MongoDB Atlas? This uses your computer and does not call a paid embedding API.")) return;
     setIndexing(true);
     setMessage("");
     try {
@@ -100,7 +116,14 @@ export default function AdminPage() {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ afterPaperId }),
         });
-        const result = await response.json();
+        const result = await readApiResponse<{
+          error?: string;
+          indexed: number;
+          skipped: number;
+          model: string;
+          done: boolean;
+          nextAfterPaperId: string | null;
+        }>(response);
         if (!response.ok) throw new Error(result.error ?? "Could not index papers.");
         indexed += result.indexed;
         skipped += result.skipped;
@@ -118,7 +141,7 @@ export default function AdminPage() {
   return <main className="admin-page">
     <header className="admin-header"><Link className="brand" href="/"><span className="brand-mark">a</span><span>atlas<span className="brand-dot">.</span></span></Link><div><Link href="/">Research search</Link>{user && <span> &nbsp;·&nbsp; {user.name} ({user.role}) &nbsp;·&nbsp; <button onClick={signOut}>Sign out</button></span>}</div></header>
     {loading ? <p>Checking your account…</p> : !user ? <section className="admin-panel"><h1>Admin sign-in required</h1><p>Sign in with an administrator account to manage the MySQL paper library.</p><Link className="auth-submit admin-link" href="/login">Go to sign in ↗</Link></section> : user.role !== "Admin" ? <section className="admin-panel"><h1>Access denied</h1><p>Your account has the Researcher role. Only an Admin can manage paper records.</p><Link href="/">Return to discovery</Link></section> : <>
-      <section className="admin-panel"><div className="eyebrow">DATABASE ADMINISTRATION</div><h1>Paper library</h1><p>Add or remove paper records in MySQL. This page and its API require the Admin role.</p><p>Generate embeddings for MySQL papers and sync them to the Atlas vector collection (maximum 500 papers per run).</p><button type="button" className="admin-index-button" onClick={indexPapers} disabled={indexing}>{indexing ? "Indexing papers…" : "Sync papers to Atlas Vector Search"}</button>
+      <section className="admin-panel"><div className="eyebrow">DATABASE ADMINISTRATION</div><h1>Paper library</h1><p>Add or remove paper records in MySQL. This page and its API require the Admin role.</p><p>Generate local embeddings with Ollama and sync papers to the Atlas vector collection (maximum 500 papers per run).</p><button type="button" className="admin-index-button" onClick={indexPapers} disabled={indexing}>{indexing ? "Indexing papers…" : "Sync papers to Atlas Vector Search"}</button>
         <form className="admin-form" onSubmit={addPaper}>
           <label>Title<input name="title" required maxLength={1000} /></label>
           <label>Abstract<textarea name="abstract" required maxLength={20000} rows={4} /></label>

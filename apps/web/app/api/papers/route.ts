@@ -75,9 +75,10 @@ export async function GET(request: Request) {
       });
       return NextResponse.json({ papers, mode: "semantic", model });
     } catch (error) {
-      console.error("Semantic paper search failed:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Semantic paper search failed:", message);
       return NextResponse.json({
-        error: "Semantic search is not ready. Check OPENAI_API_KEY, MONGODB_URI, and the Atlas vector index setup.",
+        error: "Semantic search is not ready. Check that Ollama is running with the configured model and that the Atlas vector index is active.",
       }, { status: 503 });
     }
   }
