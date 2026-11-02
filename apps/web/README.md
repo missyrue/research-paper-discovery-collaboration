@@ -1,4 +1,4 @@
-# Atlas web prototype
+# Atlas web application
 
 This is the Next.js App Router application for the Research Paper Discovery
 & Collaboration System. Keyword search uses local MySQL. Signed-in users can

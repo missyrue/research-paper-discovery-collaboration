@@ -3,7 +3,7 @@
 ## 1. Title
 
 **Research Paper Discovery & Collaboration System**
-A web application prototype for academic paper discovery, organization, and researcher collaboration.
+A web application for academic paper discovery and organization.
 
 ## 2. Students
 
@@ -18,7 +18,7 @@ Academic literature is growing rapidly, while keyword-only discovery can miss us
 
 ## 4. Tech Stack
 
-| Component | Proposed technology | Responsibility |
+| Component | Implemented technology | Responsibility |
 |---|---|---|
 | Web client | Next.js App Router, React, TypeScript | Search UI, paper details, collections, groups, discussions |
 | Relational database | MySQL 8 | Users/roles, papers/authors, interests, bookmarks, collections, groups, discussions |
@@ -27,30 +27,35 @@ Academic literature is growing rapidly, while keyword-only discovery can miss us
 | Password and session handling | Node.js crypto (scrypt and HMAC) | Salted password hashes and signed, HTTP-only session cookies |
 | Embeddings | Ollama `nomic-embed-text` running locally | Embeds paper title/abstract and query text at 768 dimensions; no hosted API key or per-request fee |
 
-The supplied brief does not prescribe specific vendors or framework versions. The stack above is a proposed implementation choice.
+The stack above is the implementation used by the project.
 
 ## 5. SQL Database Commands
 
-The MySQL DDL and representative search/bookmark commands are in [`../database/mysql/schema.sql`](../database/mysql/schema.sql) and [`../database/sql/queries.sql`](../database/sql/queries.sql). A separate [`../database/sql/ddl-examples.sql`](../database/sql/ddl-examples.sql) demonstrates `CREATE`, `ALTER`, and `DROP` against a disposable staging table; do not use that demo table as application data. A local setup script creates a restricted app account and loads sample papers. Example:
+The actual MySQL DDL and application query statements are in [`../database/mysql/schema.sql`](../database/mysql/schema.sql) and [`../database/sql/queries.sql`](../database/sql/queries.sql). The setup creates the relational tables and indexes and loads the records used by the application. The `papers` table is excerpted from the project schema:
 
 ```sql
-CREATE TABLE papers (
+CREATE TABLE IF NOT EXISTS papers (
   paper_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   title TEXT NOT NULL,
-  abstract TEXT NOT NULL DEFAULT '',
+  abstract TEXT NOT NULL,
   doi VARCHAR(255) UNIQUE,
-  publication_year SMALLINT CHECK (publication_year BETWEEN 1000 AND 2200)
-);
+  publication_year SMALLINT UNSIGNED,
+  venue VARCHAR(255),
+  paper_url TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_papers_year CHECK (publication_year IS NULL OR publication_year BETWEEN 1000 AND 2200),
+  INDEX idx_papers_year (publication_year)
+)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SELECT paper_id, title, publication_year
-FROM papers
-WHERE title LIKE CONCAT('%', ?, '%')
-   OR abstract LIKE CONCAT('%', ?, '%')
-ORDER BY publication_year DESC
+SELECT p.paper_id, p.title, p.publication_year, p.venue
+FROM papers AS p
+WHERE p.title LIKE ? OR p.abstract LIKE ?
+ORDER BY p.publication_year DESC, p.paper_id DESC
 LIMIT 20;
 ```
 
-The schema also defines roles, users, authors, paper-author relationships, interests, paper topics, collections, bookmarks, research groups, group memberships, and discussions, with foreign keys, uniqueness rules, checks, and indexes. The Next.js API uses parameterized MySQL queries. Do not store plaintext passwords. The schema and query file provide DDL/DML examples, including table creation, inserts, updates, deletes, joins, grouping, and transaction-safe bookmark operations.
+The schema also defines roles, users, authors, paper-author relationships, interests, paper topics, collections, bookmarks, research groups, group memberships, and discussions, with foreign keys, uniqueness rules, checks, and indexes. The Next.js API uses parameterized MySQL queries. Admin paper creation, update, and deletion use `INSERT`, `UPDATE`, and `DELETE` in [`../apps/web/app/api/admin/papers/route.ts`](../apps/web/app/api/admin/papers/route.ts); keyword search uses `SELECT` from [`../apps/web/app/api/papers/route.ts`](../apps/web/app/api/papers/route.ts). Do not store plaintext passwords. Application setup creates the tables and indexes in the schema; it does not use `ALTER TABLE` or `DROP TABLE` migrations. Bookmark, group, and discussion statements in the SQL query file document the relational design; those user-facing workflows are not implemented.
 
 ### Relational model / ER diagram
 
@@ -81,19 +86,7 @@ For exact columns, primary and foreign keys, and constraints, see [`../database/
 
 The application uses MongoDB Atlas Vector Search for semantic retrieval. Admins generate and upsert embeddings for MySQL papers through a keyset-paginated API that skips unchanged paper text. Local Ollama `nomic-embed-text` produces 768-dimensional vectors with document/query prefixes; Atlas stores each vector with its MySQL `paper_id`, title, abstract, topics, and model metadata. Search embeds the query locally, retrieves ranked IDs with cosine similarity, and loads authoritative paper details from MySQL. Signed-in accounts are limited to 30 semantic searches per UTC day using a MySQL usage table. Configure local Ollama and `MONGODB_URI` in ignored `.env.local`, create the 768-dimensional Atlas index from [`../database/vector/atlas-vector-index.json`](../database/vector/atlas-vector-index.json), and run Admin indexing. No OpenAI API key is used. See [`../database/vector/README.md`](../database/vector/README.md) for commands and the indexing/search workflow.
 
-Example Atlas aggregation (replace the abbreviated vector with an embedding returned by the same Ollama model):
-
-```javascript
-db.paper_vectors.aggregate([
-  { $vectorSearch: {
-      index: "paper_embedding_index", path: "embedding",
-      queryVector: [/* 768 values from nomic-embed-text */],
-      numCandidates: 200, limit: 10,
-      filter: { embedding_model: "nomic-embed-text" }
-  }},
-  { $project: { _id: 0, paper_id: 1, score: { $meta: "vectorSearchScore" } } }
-]);
-```
+The implemented MongoDB `$vectorSearch` aggregation is in [`../apps/web/lib/vector-db.ts`](../apps/web/lib/vector-db.ts). It receives a live Ollama query vector, filters by the configured model and optional topic, and returns ranked MySQL paper IDs with similarity scores. Admin ingestion is implemented in [`../apps/web/app/api/admin/vector-index/route.ts`](../apps/web/app/api/admin/vector-index/route.ts); the index definition is [`../database/vector/atlas-vector-index.json`](../database/vector/atlas-vector-index.json).
 
 ## 7. Next.js Project Tree
 
@@ -125,10 +118,10 @@ database/
 ├── mysql/seed.sql
 ├── mysql/promote-admin.sql
 ├── mysql/AUTHORIZATION.md
-└── vector/atlas-vector-search.js
+└── vector/atlas-vector-index.json
 ```
 
-## 8. Sample Screenshots: Code and Demo
+## 8. Screenshots from the Running Application
 
 The following captures show the Atlas discovery interface and paper results. The two discovery captures show three sample papers loaded from the local MySQL database and labeled as MySQL keyword results.
 
@@ -136,23 +129,21 @@ The following captures show the Atlas discovery interface and paper results. The
 
 ![Atlas paper search results returned from the MySQL sample library](../screenshots/atlas-paper-results.png)
 
-The login image records the earlier sign-in screen, which still displayed a prototype notice at the time it was captured. The current code includes account registration and sign-in through `apps/web/app/api/auth/route.ts`; verify these flows against the configured local database before treating the image as authentication evidence. The search implementation is in `apps/web/app/api/papers/route.ts`, with connection settings loaded by `apps/web/lib/db.ts`. Screenshots do not show credentials or private user data. Add a semantic-search capture after Ollama is running, the Atlas index is active, and the admin indexing workflow has populated vectors.
+The search implementation is in `apps/web/app/api/papers/route.ts`; registration, sign-in, and role checks are implemented through `apps/web/app/api/auth/route.ts` and `apps/web/lib/authorization.ts`. These captures show genuine MySQL keyword-search screens. Sign-in, semantic-search, and source-code screenshots are not included here.
 
-![Earlier Atlas sign-in screen prototype, before database authentication was connected](../screenshots/atlas-login-prototype.png)
+### Verified database and semantic retrieval results
 
-### Verification checklist
+The following values were checked against the running local project and connected Atlas collection on 2026-11-02:
 
-Record real results from the demo before submission; the repository screenshots currently document the MySQL keyword UI, not a completed semantic-search run.
-
-| Check | Expected evidence |
+| Check | Verified result |
 |---|---|
-| MySQL connection and keyword search | `/api/health` reports MySQL connected; a keyword query returns seeded papers |
-| Authentication and roles | Researcher sign-in succeeds; Researcher is denied the Admin indexing route; Admin can access `/admin` |
-| Local embeddings | `ollama list` includes `nomic-embed-text`; Ollama returns 768 values from `/api/embed` |
-| MongoDB connection and index | Atlas connection succeeds and `paper_embedding_index` is Active with 768 dimensions |
-| Vector ingestion and retrieval | Admin sync indexes papers; semantic query returns paper IDs that resolve to MySQL records |
+| MySQL | Connected to `atlas_research` on MySQL 8.4.9; 3 paper records |
+| Local embeddings | Ollama `nomic-embed-text`; query vector has 768 dimensions |
+| MongoDB Atlas | Connected; `paper_embedding_index` is `READY` with 768 dimensions |
+| Vector ingestion | 3 paper vectors stored with model `nomic-embed-text` |
+| Semantic query | `graph models for molecular discovery` returned 3 matches; top result was *Molecular Property Prediction with Graph Neural Networks* (paper ID 1, score 0.8691) |
 
-Do not report a checklist item as passed until demonstrated on the submission machine.
+The application resolves search result IDs to canonical paper records in MySQL.
 
 ## 9. Problem, Objectives, Scope, and Requirements
 
@@ -172,9 +163,9 @@ Keyword search can miss relevant research when a paper describes an idea using d
 | Requirement | Implementation status |
 |---|---|
 | Search and filter the seeded paper library | Implemented with parameterized MySQL queries |
-| Register/sign in as a Researcher; restrict Admin operations | Implemented with database roles and protected routes; verify both roles in the submission demo |
+| Register/sign in as a Researcher; restrict Admin operations | Implemented with database roles and protected routes; role-specific screenshots are not included here |
 | Add, edit, and remove paper records as Admin | Implemented through the Admin page and protected API |
-| Create paper vectors and retrieve semantic matches | Implemented with local Ollama embeddings and MongoDB Atlas; requires the Admin indexing run for the current data |
+| Create paper vectors and retrieve semantic matches | Verified: 3 local Ollama vectors stored in Atlas and semantic query returned 3 matches |
 | Persist bookmarks, collections, research groups, and discussions | Represented in the relational schema; user-facing persistence workflows remain future work |
 
 ### Database choice and advanced DBMS concepts
@@ -216,7 +207,7 @@ The project demonstrates a hybrid DBMS design that combines relational integrity
 - Persist bookmarks and collections through authenticated APIs.
 - Implement research-group and discussion workflows.
 - Add paper ingestion from scholarly sources and evaluate retrieval quality on a larger dataset.
-- Capture verified semantic-search and role-based authorization screenshots for the final submission.
+- Capture the verified semantic-search screen, source code, and role-based authorization screens if required by the instructor.
 
 ## Repository
 

@@ -1,4 +1,4 @@
--- MySQL 8 examples for the relational database.
+-- MySQL 8 query statements for the relational database.
 -- Bind each ? value in the application layer; never concatenate user input.
 
 -- 1. Search titles and abstracts. The API expands a phrase into bound terms.
@@ -62,12 +62,3 @@ INSERT INTO paper_authors (paper_id, author_id, author_order)
 VALUES (?, @author_id, ?)
 ON DUPLICATE KEY UPDATE author_order = VALUES(author_order);
 COMMIT;
-
--- 8. Update a paper's publication details (bind the values in the API).
-UPDATE papers
-SET venue = ?, publication_year = ?
-WHERE paper_id = ?;
-
--- 9. Remove a user's bookmark without deleting the paper itself.
-DELETE FROM bookmarks
-WHERE user_id = ? AND paper_id = ?;

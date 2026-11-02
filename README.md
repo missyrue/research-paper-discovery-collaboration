@@ -16,18 +16,17 @@ Researchers often search across large collections of papers using exact keywords
 
 The current app searches and filters a seeded MySQL paper library, supports researcher accounts and admin-controlled paper management, and includes a semantic retrieval path backed by Atlas and local Ollama embeddings. Saved-paper persistence, collections, and research collaboration remain future work.
 
-## Proposed Features
+## Implemented and Planned Features
 
-- Search and filter papers by keywords and metadata.
-- Discover papers with related meaning using vector similarity search.
-- View paper details, abstracts, publication information, and authors.
-- Bookmark papers and organize them into personal collections.
-- Record user interests for relevant discovery.
-- Create research groups and manage group membership.
-- Discuss papers with other researchers.
-- Apply role-based access for researchers and administrators.
+| Feature | Status |
+|---|---|
+| Keyword search and topic filters | Implemented with MySQL |
+| Semantic paper search | Implemented with Ollama embeddings and MongoDB Atlas Vector Search |
+| Registration/sign-in and Researcher/Admin roles | Implemented in the application; see authorization setup |
+| Admin paper management and vector indexing | Implemented in protected routes and `/admin` |
+| Bookmarks, collections, interests, groups, and discussions | Schema included; persistent user workflows are future work |
 
-## Proposed Technology Stack
+## Technology Stack
 
 | Layer | Technology | Purpose |
 |---|---|---|
@@ -47,17 +46,16 @@ The Atlas connection string and MySQL credentials are per-developer secrets in i
 ├── database/
 │   ├── mysql/                        # MySQL schema, seed data, and local setup
 │   ├── sql/schema.sql                # SQL relational schema
-│   ├── sql/queries.sql               # Parameterized application query examples
+│   ├── sql/queries.sql               # Parameterized SQL query statements
 │   └── vector/                        # Atlas Vector Search setup and demo
 ├── docs/
 │   └── DBMS_PROJECT_REPORT.md        # DBMS mini project report
 └── screenshots/
     ├── atlas-discovery-mysql.png     # App search page
-    ├── atlas-paper-results.png      # MySQL result cards
-    └── atlas-login-prototype.png    # Earlier sign-in UI capture
+    └── atlas-paper-results.png      # MySQL result cards
 ```
 
-The report uses the supplied captures of the running discovery interface. The sign-in capture is from the earlier UI prototype and is not evidence of a successful login.
+The checked-in screenshots show the running MySQL keyword-search interface. They do not document sign-in or semantic search.
 
 ## Database Design
 
@@ -104,9 +102,9 @@ See [`docs/DBMS_PROJECT_REPORT.md`](docs/DBMS_PROJECT_REPORT.md) for the require
 
 1. Verify registration and sign-in against the local MySQL instance.
 2. Persist bookmarks and collections for signed-in users.
-3. Install Ollama, pull `nomic-embed-text`, configure Atlas, and verify vector ingestion/search on the target environment.
-4. Persist bookmarks and collections for signed-in users.
-5. Build research-group, collaboration, and discussion workflows.
+3. Persist bookmarks and collections for signed-in users.
+4. Build research-group, collaboration, and discussion workflows.
+5. Capture the live semantic-search and role authorization flows for the final report.
 
 ## Resume Project Name
 
@@ -120,7 +118,7 @@ The work is divided into two comparable database-focused tracks so each student 
 
 | Student | Owned work | Files / deliverables |
 |---|---|---|
-| Aaruni Choudhary (PES2UG24CS013) | Relational data model: MySQL tables, keys, constraints, indexes, and application query examples | `database/mysql/`, `database/sql/schema.sql`, `database/sql/queries.sql` |
-| Anchita Chhibba (PES2UG24CS060) | Semantic retrieval: vector document model, Atlas index configuration, embedding ingestion/search examples, and semantic-search evaluation/demo | `database/vector/`, semantic retrieval documentation and demo evidence |
+| Aaruni Choudhary (PES2UG24CS013) | Relational data model: MySQL tables, keys, constraints, indexes, and application query statements | `database/mysql/`, `database/sql/schema.sql`, `database/sql/queries.sql` |
+| Anchita Chhibba (PES2UG24CS060) | Semantic retrieval implementation: vector document model, Atlas index, embedding ingestion, search, and verified retrieval | `database/vector/`, semantic retrieval code and demo evidence |
 
 Each student should commit their own work under their GitHub identity after reviewing it. The relational and vector tracks can be developed independently and integrated through the shared `paper_id` identifier.
