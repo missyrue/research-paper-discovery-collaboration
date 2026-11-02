@@ -6,7 +6,7 @@
 ## Deliverables
 
 - `database/sql/schema.sql`: MySQL relational tables, keys, constraints, and indexes.
-- `database/sql/queries.sql`: parameterized MySQL search, detail, bookmark, group, discussion, and author examples.
+- `database/sql/queries.sql`: parameterized MySQL search, detail, bookmark, group, discussion, and author query statements.
 - `database/mysql/seed.sql`: repeatable sample paper data for the UI demo.
 - `report_sections/SQL_SECTION.md`: report contribution summary.
 

@@ -8,25 +8,44 @@ export type PaperVector = {
   topics: string[];
   embedding: number[];
   embedding_model: string;
+  content_hash: string;
   updated_at: Date;
 };
 
 declare global {
   // eslint-disable-next-line no-var
   var atlasVectorMongoClient: MongoClient | undefined;
+  // eslint-disable-next-line no-var
+  var atlasVectorMongoClientPromise: Promise<MongoClient> | undefined;
 }
 
 export async function getPaperVectorCollection(): Promise<Collection<PaperVector>> {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("Set MONGODB_URI in apps/web/.env.local to enable semantic search.");
-  const client = globalThis.atlasVectorMongoClient ?? new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
-  if (!globalThis.atlasVectorMongoClient) {
-    await client.connect();
-    globalThis.atlasVectorMongoClient = client;
+  let client = globalThis.atlasVectorMongoClient;
+  if (!client) {
+    if (!globalThis.atlasVectorMongoClientPromise) {
+      const newClient = new MongoClient(uri, {
+        serverSelectionTimeoutMS: 8000,
+        maxPoolSize: 20,
+        retryReads: true,
+        retryWrites: true,
+      });
+      globalThis.atlasVectorMongoClientPromise = newClient.connect().then(() => {
+        globalThis.atlasVectorMongoClient = newClient;
+        return newClient;
+      }).catch((error) => {
+        globalThis.atlasVectorMongoClientPromise = undefined;
+        throw error;
+      });
+    }
+    client = await globalThis.atlasVectorMongoClientPromise;
   }
   const database = process.env.MONGODB_DATABASE ?? "research_papers";
   const collection = process.env.MONGODB_COLLECTION ?? "paper_vectors";
-  return client.db(database).collection<PaperVector>(collection);
+  const vectorCollection = client.db(database).collection<PaperVector>(collection);
+  await vectorCollection.createIndex({ paper_id: 1 }, { unique: true, name: "uq_paper_vector_id" });
+  return vectorCollection;
 }
 
 export async function searchPaperVectors(

@@ -8,7 +8,7 @@ declare global {
 export function getDbPool(): Pool {
   if (globalThis.atlasMysqlPool) return globalThis.atlasMysqlPool;
 
-  const { MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD } = process.env;
+  const { MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD, MYSQL_SSL, MYSQL_SSL_CA } = process.env;
   if (!MYSQL_HOST || !MYSQL_PORT || !MYSQL_DATABASE || !MYSQL_USER || !MYSQL_PASSWORD) {
     throw new Error("MySQL is not configured. Run database/mysql/setup-local.ps1 or copy apps/web/.env.example to .env.local.");
   }
@@ -19,6 +19,10 @@ export function getDbPool(): Pool {
     database: MYSQL_DATABASE,
     user: MYSQL_USER,
     password: MYSQL_PASSWORD,
+    ssl: MYSQL_SSL === "true" ? {
+      rejectUnauthorized: true,
+      ...(MYSQL_SSL_CA ? { ca: MYSQL_SSL_CA.replace(/\\n/g, "\n") } : {}),
+    } : undefined,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

@@ -16,6 +16,13 @@ type Paper = {
 };
 type CurrentUser = { name: string; email: string; role: "Admin" | "Researcher" };
 
+async function readApiResponse<T>(response: Response): Promise<T> {
+  const body = await response.text();
+  if (!body.trim()) throw new Error(`The server returned an empty response (HTTP ${response.status}). Check the Next.js terminal.`);
+  try { return JSON.parse(body) as T; }
+  catch { throw new Error(`The server returned a non-JSON response (HTTP ${response.status}). Check the Next.js terminal.`); }
+}
+
 const topics = ["All papers", "Machine learning", "Biology", "Computer vision", "Natural language"];
 
 export default function Home() {
@@ -32,7 +39,7 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/auth").then((response) => response.json()).then((payload) => {
+    fetch("/api/auth").then((response) => readApiResponse<{ user?: CurrentUser | null }>(response)).then((payload) => {
       if (active) setCurrentUser(payload.user ?? null);
     }).catch(() => { if (active) setCurrentUser(null); });
     return () => { active = false; };
@@ -50,9 +57,10 @@ export default function Home() {
     setError("");
     fetch(`/api/papers?${params.toString()}`)
       .then(async (response) => {
-        const payload = await response.json();
+        const payload = await readApiResponse<{ papers?: Paper[]; error?: string }>(response);
         if (!response.ok) throw new Error(payload.error ?? "Paper search failed.");
-        return payload as { papers: Paper[] };
+        if (!payload.papers) throw new Error("The server response did not include paper results.");
+        return { papers: payload.papers };
       })
       .then((payload) => { if (active) setResults(payload.papers); })
       .catch((reason: unknown) => {
